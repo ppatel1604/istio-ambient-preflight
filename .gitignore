@@ -1,0 +1,39 @@
+# PowerShell / module build artifacts
+*.nupkg
+bin/
+obj/
+publish/
+Output/
+
+# Pester / test output
+TestResults.xml
+coverage.xml
+coverage.json
+testResults/
+*.coverage
+*.coveragexml
+
+# Generated reports from local runs
+ambient-preflight-report.md
+reports/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*~
+
+# PowerShell Gallery API keys, never commit
+.psgallery-key
+nuget.config
+
+# kubeconfigs accidentally dropped into the repo
+kubeconfig
+kubeconfig.*
+*.kubeconfig
+
+# Local dev scratch
+scratch/
+tmp/
