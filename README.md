@@ -56,7 +56,7 @@ Prerequisites:
 
 ## Example Output
 
-See [`examples/sample-report.md`](./examples/sample-report.md) for a full example. A snippet:
+See [`examples/sample-report.md`](./examples/demo-cluster/sample-report.md) for a full example. A snippet:
 
 ```markdown
 ## 🔴 Blocker: Cilium policy incompatible with ambient waypoint traffic
