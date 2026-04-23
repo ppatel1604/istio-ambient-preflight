@@ -43,10 +43,13 @@ Install-Module IstioAmbientPreflight -Scope CurrentUser
 Invoke-AmbientPreflight
 
 # Or target a specific context
-Invoke-AmbientPreflight -Context my-cluster -OutputPath ./reports/
+Invoke-AmbientPreflight -Context my-cluster -OutputPath ./reports/prod.md
 
 # Filter to a specific namespace
 Invoke-AmbientPreflight -Namespace payments
+
+# Suppress expected noise from infrastructure namespaces
+Invoke-AmbientPreflight -ExcludeNamespace argocd, monitoring, cert-manager
 ```
 
 Prerequisites:
@@ -56,33 +59,42 @@ Prerequisites:
 
 ## Example Output
 
-See [`examples/sample-report.md`](./examples/demo-cluster/sample-report.md) for a full example. A snippet:
+See [`examples/demo-cluster/sample-report.md`](./examples/demo-cluster/sample-report.md) for a full example. A snippet:
 
 ```markdown
-## 🔴 Blocker: Cilium policy incompatible with ambient waypoint traffic
+### C-02 · Network · CiliumNetworkPolicy/allow-frontend in namespace payments
 
-**Resource:** `NetworkPolicy/allow-frontend-to-api` in namespace `payments`
-**Issue:** This policy restricts ingress by pod selector only. In ambient mode
-with a waypoint proxy, traffic arrives from the waypoint's identity, not the
-original source pod. The policy will drop legitimate mesh traffic after migration.
+CiliumNetworkPolicy 'allow-frontend' in ambient namespace 'payments' declares
+ingress rules but does not allow TCP port 15008. In ambient mode, mesh traffic
+arrives on the destination node via ztunnel using HBONE on TCP/15008; this
+policy will silently drop mesh traffic after migration. Add an ingress rule
+that permits TCP/15008 from the ztunnel DaemonSet, or migrate the L7 controls
+to an Istio AuthorizationPolicy.
 
-**Recommended action:** Add an `ingress` rule that allows traffic from pods
-labeled `istio.io/gateway-name=<your-waypoint>`, or migrate to Istio
-AuthorizationPolicy for L7 controls.
-
-**Reference:** https://istio.io/latest/docs/ambient/usage/waypoint/
+**Reference:** https://istio.io/latest/docs/ambient/architecture/traffic-redirection/
 ```
 
 ## What It Checks
 
-| Check | Category | Severity |
-|---|---|---|
-| Namespaces missing `istio.io/dataplane-mode=ambient` label | Labels | Warning |
-| Pods with `istio.io/dataplane-mode=none` in ambient namespaces | Labels | Info |
-| Cilium NetworkPolicies incompatible with ambient traffic paths | Network | Blocker |
-| Istio Gateway + Gateway API conflicts on same ingress | Ingress | Blocker |
-| Existing sidecar injection labels that will no-op in ambient | Labels | Info |
-| ... (see [ROADMAP.md](./ROADMAP.md) for the full and upcoming list) | | |
+### Implemented
+
+| ID | Check | Category | Severity |
+|---|---|---|---|
+| N-01 | Namespaces missing `istio.io/dataplane-mode=ambient` (and not explicitly opted out with `=none`) | Labels | Warning |
+| C-02 | CiliumNetworkPolicies in ambient namespaces that do not allow TCP/15008 for ztunnel HBONE traffic | Network | Blocker |
+
+### Planned for v0.1
+
+| ID | Check | Category | Severity |
+|---|---|---|---|
+| N-02 | Namespaces with conflicting labels (both `istio-injection=enabled` and ambient) | Labels | Blocker |
+| P-01 | Pods explicitly opted out via `istio.io/dataplane-mode=none` in ambient namespaces | Labels | Info |
+| P-02 | Pods with existing sidecar injection labels that will no-op in ambient | Labels | Info |
+| C-01 | Cilium NetworkPolicies using pod-selector ingress that will fail with waypoint-routed traffic | Network | Blocker |
+| G-01 | Mixed Istio Gateway + Gateway API resources on overlapping hosts | Ingress | Blocker |
+| G-02 | VirtualServices referencing gateways that don't exist | Ingress | Warning |
+
+See [ROADMAP.md](./ROADMAP.md) for the full plan.
 
 ## Who This Is For
 

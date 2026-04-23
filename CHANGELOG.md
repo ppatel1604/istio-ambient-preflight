@@ -19,6 +19,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Test-NamespaceLabels` private helper — **first real check (N-01)**:
   Warning for namespaces missing `istio.io/dataplane-mode=ambient` and not
   explicitly opted out with `...=none`. System namespaces are skipped.
+- `Test-CiliumPolicyCompatibility` private helper — **check C-02**:
+  Blocker for any CiliumNetworkPolicy in an ambient-enrolled namespace
+  whose ingress rules do not admit ztunnel HBONE traffic on TCP port
+  15008. Policies in non-ambient namespaces and egress-only policies are
+  ignored. No-ops silently when the Cilium CRD is not installed.
+- `-ExcludeNamespace` parameter on `Invoke-AmbientPreflight` and
+  `Test-NamespaceLabels`: appends user-supplied names to the built-in
+  system-namespace skip list (kube-system, kube-public, kube-node-lease,
+  istio-system, cilium). Lets kind/AKS/EKS/GKE users suppress expected
+  N-01 noise from infrastructure namespaces.
 - `New-AmbientMigrationReport` public cmdlet: renders findings to a markdown
   report with a readiness verdict (Ready / Ready with Warnings / Blocked),
   a severity-count summary table, and three always-emitted sections

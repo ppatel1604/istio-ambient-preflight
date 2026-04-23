@@ -6,12 +6,12 @@
 
 ### Checks to implement
 
-- [ ] **N-01** Namespace missing `istio.io/dataplane-mode=ambient` label (Warning)
+- [x] **N-01** Namespace missing `istio.io/dataplane-mode=ambient` label (Warning)
 - [ ] **N-02** Namespace has conflicting labels (e.g. both `istio-injection=enabled` and ambient) (Blocker)
 - [ ] **P-01** Pods explicitly opted out via `istio.io/dataplane-mode=none` in ambient namespaces (Info)
 - [ ] **P-02** Pods with existing sidecar injection that will be ignored in ambient (Info)
 - [ ] **C-01** Cilium NetworkPolicy using pod-selector ingress that will fail with waypoint-routed traffic (Blocker)
-- [ ] **C-02** Cilium NetworkPolicy missing allowances for ztunnel traffic on port 15008 (Blocker)
+- [x] **C-02** Cilium NetworkPolicy missing allowances for ztunnel traffic on port 15008 (Blocker)
 - [ ] **G-01** Mixed Istio Gateway + Gateway API resources on overlapping hosts (Blocker)
 - [ ] **G-02** VirtualServices referencing gateways that don't exist (Warning)
 

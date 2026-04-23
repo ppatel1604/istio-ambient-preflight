@@ -25,6 +25,11 @@ function Invoke-AmbientPreflight {
         Optional filter. When supplied, checks consider only this namespace.
         Useful for scoped reviews of a single team or application.
 
+    .PARAMETER ExcludeNamespace
+        Additional namespace names to skip when emitting namespace-label
+        findings (N-01). Appended to the built-in system namespace list.
+        Other checks are unaffected.
+
     .EXAMPLE
         PS> Invoke-AmbientPreflight
         Runs against the current kubectl context, writes
@@ -35,6 +40,9 @@ function Invoke-AmbientPreflight {
 
     .EXAMPLE
         PS> Invoke-AmbientPreflight -Namespace payments
+
+    .EXAMPLE
+        PS> Invoke-AmbientPreflight -ExcludeNamespace argocd, monitoring
 
     .OUTPUTS
         PSCustomObject with fields:
@@ -57,7 +65,10 @@ function Invoke-AmbientPreflight {
         [string]$OutputPath = (Join-Path -Path (Get-Location).Path -ChildPath 'ambient-preflight-report.md'),
 
         [Parameter()]
-        [string]$Namespace
+        [string]$Namespace,
+
+        [Parameter()]
+        [string[]]$ExcludeNamespace
     )
 
     Write-Host 'istio-ambient-preflight' -ForegroundColor Cyan
@@ -87,8 +98,16 @@ function Invoke-AmbientPreflight {
         $checkParams.Namespace = $Namespace
     }
 
+    $namespaceLabelParams = $checkParams.Clone()
+    if ($PSBoundParameters.ContainsKey('ExcludeNamespace') -and $ExcludeNamespace) {
+        $namespaceLabelParams.ExcludeNamespace = $ExcludeNamespace
+    }
+
     $findings = [System.Collections.Generic.List[object]]::new()
-    foreach ($finding in @(Test-NamespaceLabels @checkParams)) {
+    foreach ($finding in @(Test-NamespaceLabels @namespaceLabelParams)) {
+        $findings.Add($finding)
+    }
+    foreach ($finding in @(Test-CiliumPolicyCompatibility -Inventory $inventory)) {
         $findings.Add($finding)
     }
     # Future checks plug in here.

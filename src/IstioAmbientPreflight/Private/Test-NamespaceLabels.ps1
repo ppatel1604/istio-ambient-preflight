@@ -26,6 +26,12 @@ function Test-NamespaceLabels {
         Optional filter. When supplied, only the namespace with this name is
         considered; all others are skipped.
 
+    .PARAMETER ExcludeNamespace
+        Additional namespace names to skip, appended to the built-in system
+        namespace list. Useful for suppressing expected noise from the
+        report (for example, infrastructure namespaces the user has
+        decided to leave outside the mesh).
+
     .OUTPUTS
         Zero or more finding objects produced by Format-Finding.
     #>
@@ -39,7 +45,10 @@ function Test-NamespaceLabels {
         $Inventory,
 
         [Parameter()]
-        [string]$Namespace
+        [string]$Namespace,
+
+        [Parameter()]
+        [string[]]$ExcludeNamespace
     )
 
     $systemNamespaces = @(
@@ -50,12 +59,20 @@ function Test-NamespaceLabels {
         'cilium'
     )
 
+    $skipList = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    foreach ($sysNs in $systemNamespaces) { [void]$skipList.Add($sysNs) }
+    if ($ExcludeNamespace) {
+        foreach ($extra in $ExcludeNamespace) {
+            if (-not [string]::IsNullOrWhiteSpace($extra)) { [void]$skipList.Add($extra) }
+        }
+    }
+
     $filterRequested = $PSBoundParameters.ContainsKey('Namespace') -and -not [string]::IsNullOrWhiteSpace($Namespace)
 
     foreach ($ns in @($Inventory.Namespaces)) {
         $name = $ns.metadata.name
         if (-not $name) { continue }
-        if ($systemNamespaces -contains $name) { continue }
+        if ($skipList.Contains($name)) { continue }
         if ($filterRequested -and $name -ne $Namespace) { continue }
 
         $labels = $null

@@ -100,4 +100,17 @@ Describe 'Test-NamespaceLabels (N-01)' {
         $findings = @(Test-NamespaceLabels -Inventory (New-Inventory @()))
         $findings.Count | Should -Be 0
     }
+
+    It 'honors -ExcludeNamespace by skipping the supplied names in addition to the built-in system list' {
+        $inv = New-Inventory @(
+            New-Ns -Name 'argocd'
+            New-Ns -Name 'monitoring'
+            New-Ns -Name 'demo-app'
+        )
+
+        $findings = @(Test-NamespaceLabels -Inventory $inv -ExcludeNamespace 'argocd', 'monitoring')
+
+        $findings.Count       | Should -Be 1
+        $findings[0].Resource | Should -Be 'Namespace/demo-app'
+    }
 }
