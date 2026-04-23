@@ -1,0 +1,25 @@
+# A CiliumNetworkPolicy that is "correct" for a sidecar-mode world but
+# will silently drop mesh traffic once the namespace is ambient-enrolled:
+# it declares an ingress rule restricted to TCP/8080 and omits the
+# ztunnel HBONE path on TCP/15008. C-02 should flag this policy.
+#
+# Requires the Cilium CRDs to be installed in the cluster. On a bare kind
+# cluster without Cilium, applying this file will fail with
+# "no matches for kind" — install Cilium first (see README in this dir).
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-frontend
+  namespace: demo-app
+spec:
+  endpointSelector:
+    matchLabels:
+      app: frontend
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app: backend
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP

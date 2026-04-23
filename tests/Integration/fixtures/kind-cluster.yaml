@@ -1,0 +1,11 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: ambient-preflight-fixture
+nodes:
+  - role: control-plane
+  - role: worker
+networking:
+  # Disable kindnet so Cilium (installed separately) can own the CNI.
+  disableDefaultCNI: true
+  # Kube-proxy stays in place: we only care about exercising the
+  # preflight checks, not a production ambient deployment.

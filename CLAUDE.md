@@ -65,7 +65,7 @@ It is a free, open-source tool. It is also a portfolio piece and consulting lead
 - Public cmdlets in `src/IstioAmbientPreflight/Public/`, one file per cmdlet
 - Private helpers in `src/IstioAmbientPreflight/Private/`
 - Every public cmdlet has comment-based help (synopsis, description, parameters, example)
-- Every check is a separate private function returning a structured finding object: `@{ Severity; Category; Resource; Message; DocLink }`
+- Every check is a separate private function returning a structured finding object built via `Format-Finding`: `@{ Severity; Category; CheckId; Resource; Message; DocLink }` (PSTypeName `IstioAmbientPreflight.Finding`). A single private function may emit findings for multiple related CheckIds when they share one pass over the inventory (e.g. `Test-NamespaceLabels` emits both N-01 and N-02).
 - No Write-Host for data output — use Write-Output / structured objects. Write-Host is fine for progress UI.
 - No trailing whitespace, LF line endings, UTF-8 without BOM
 
@@ -127,6 +127,20 @@ istio-ambient-preflight/
 - [ ] Sample report in `examples/` is convincing and shows what "good output" looks like
 
 ## Build Order (Suggested)
+
+**Current status (2026-04-24):** steps 1–5 are complete. The scaffold,
+`Invoke-Kubectl` wrapper, `Get-ClusterInventory`, `Format-Finding`,
+`New-AmbientMigrationReport`, and the `Invoke-AmbientPreflight`
+orchestrator are all in place and covered by Pester unit tests. Three
+checks are implemented against that pattern: **N-01** (Warning — namespace
+missing `istio.io/dataplane-mode` label), **N-02** (Blocker — conflicting
+`istio-injection=enabled` + `istio.io/dataplane-mode=ambient` labels), and
+**C-02** (Blocker — CiliumNetworkPolicy in an ambient namespace that does
+not allow TCP/15008 for ztunnel HBONE traffic). Remaining v0.1 work: the
+P-/C-01/G- checks in step 6, a proper kind-based integration harness
+(step 7 — fixture YAML is staged under `tests/Integration/fixtures/` but
+not yet wired into CI), README polish (step 8), and the v0.1.0 release
+(step 9).
 
 1. Repo scaffold: license, readme skeleton, module manifest, directory structure, .gitignore, GitHub Actions stub
 2. `Invoke-Kubectl` wrapper + `Get-ClusterInventory` — foundation

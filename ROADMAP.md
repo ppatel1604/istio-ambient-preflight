@@ -4,36 +4,39 @@
 
 **Goal:** A working tool that scans a cluster, runs 6+ checks, and produces a useful markdown report. Shippable to PowerShell Gallery.
 
-### Checks to implement
+### Completed
 
 - [x] **N-01** Namespace missing `istio.io/dataplane-mode=ambient` label (Warning)
-- [ ] **N-02** Namespace has conflicting labels (e.g. both `istio-injection=enabled` and ambient) (Blocker)
+- [x] **N-02** Namespace has conflicting labels (both `istio-injection=enabled` and `istio.io/dataplane-mode=ambient`) (Blocker)
+- [x] **C-02** Cilium NetworkPolicy missing allowances for ztunnel traffic on port 15008 (Blocker)
+
+### Checks to implement
+
 - [ ] **P-01** Pods explicitly opted out via `istio.io/dataplane-mode=none` in ambient namespaces (Info)
 - [ ] **P-02** Pods with existing sidecar injection that will be ignored in ambient (Info)
 - [ ] **C-01** Cilium NetworkPolicy using pod-selector ingress that will fail with waypoint-routed traffic (Blocker)
-- [x] **C-02** Cilium NetworkPolicy missing allowances for ztunnel traffic on port 15008 (Blocker)
 - [ ] **G-01** Mixed Istio Gateway + Gateway API resources on overlapping hosts (Blocker)
 - [ ] **G-02** VirtualServices referencing gateways that don't exist (Warning)
 
 ### Foundation
 
-- [ ] Module scaffold + manifest
-- [ ] `Invoke-Kubectl` wrapper (handles context, JSON parsing, error paths)
-- [ ] `Get-ClusterInventory` — single pass of cluster state, cached for all checks
-- [ ] `Format-Finding` — canonical finding object shape
-- [ ] `New-AmbientMigrationReport` — markdown writer with severity grouping
-- [ ] `Invoke-AmbientPreflight` — top-level orchestrator
+- [x] Module scaffold + manifest
+- [x] `Invoke-Kubectl` wrapper (handles context, JSON parsing, error paths)
+- [x] `Get-ClusterInventory` — single pass of cluster state, cached for all checks
+- [x] `Format-Finding` — canonical finding object shape
+- [x] `New-AmbientMigrationReport` — markdown writer with severity grouping
+- [x] `Invoke-AmbientPreflight` — top-level orchestrator
 
 ### Quality
 
-- [ ] Pester unit tests for every Public and Private function
+- [ ] Pester unit tests for every Public and Private function (Public `Invoke-AmbientPreflight` still pending)
 - [ ] Integration test harness: `kind` cluster with Istio ambient, Cilium, and a sample app
-- [ ] GitHub Actions CI: lint + unit on every push; integration on PR
+- [x] GitHub Actions CI: PSScriptAnalyzer lint + Pester unit tests on every push and PR
 - [ ] PSScriptAnalyzer passes with zero warnings
 
 ### Launch artifacts
 
-- [ ] `examples/sample-report.md` — realistic example output
+- [x] `examples/demo-cluster/sample-report.md` — realistic example output
 - [ ] Demo GIF or short screencast in the README
 - [ ] `CHANGELOG.md` with v0.1.0 entry
 - [ ] PowerShell Gallery publish

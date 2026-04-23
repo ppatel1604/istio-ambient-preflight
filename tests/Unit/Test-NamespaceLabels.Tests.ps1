@@ -114,3 +114,65 @@ Describe 'Test-NamespaceLabels (N-01)' {
         $findings[0].Resource | Should -Be 'Namespace/demo-app'
     }
 }
+
+Describe 'Test-NamespaceLabels (N-02)' {
+
+    It 'emits no N-02 finding when only istio-injection=enabled is set' {
+        $inv = New-Inventory @(New-Ns -Name 'legacy' -Labels @{ 'istio-injection' = 'enabled' })
+
+        $findings = @(Test-NamespaceLabels -Inventory $inv)
+
+        ($findings | Where-Object CheckId -eq 'N-02').Count | Should -Be 0
+    }
+
+    It 'emits no N-02 finding when only dataplane-mode=ambient is set' {
+        $inv = New-Inventory @(New-Ns -Name 'payments' -Labels @{ 'istio.io/dataplane-mode' = 'ambient' })
+
+        $findings = @(Test-NamespaceLabels -Inventory $inv)
+
+        ($findings | Where-Object CheckId -eq 'N-02').Count | Should -Be 0
+    }
+
+    It 'emits a single Blocker N-02 finding when both labels are set' {
+        $inv = New-Inventory @(New-Ns -Name 'half-migrated' -Labels @{
+                'istio-injection'         = 'enabled'
+                'istio.io/dataplane-mode' = 'ambient'
+            })
+
+        $findings = @(Test-NamespaceLabels -Inventory $inv)
+
+        $n02 = @($findings | Where-Object CheckId -eq 'N-02')
+        $n02.Count            | Should -Be 1
+        $n02[0].Severity      | Should -Be 'Blocker'
+        $n02[0].Category      | Should -Be 'Labels'
+        $n02[0].Resource      | Should -Be 'Namespace/half-migrated'
+        $n02[0].DocLink       | Should -Be 'https://istio.io/latest/docs/ambient/usage/add-workloads/'
+        $n02[0].Message       | Should -Match 'istio-injection'
+        $n02[0].Message       | Should -Match 'istio\.io/dataplane-mode=ambient'
+
+        # N-02 preempts N-01 for the same namespace.
+        ($findings | Where-Object CheckId -eq 'N-01' | Where-Object Resource -eq 'Namespace/half-migrated').Count | Should -Be 0
+    }
+
+    It 'does not fire when istio-injection=disabled is paired with ambient' {
+        $inv = New-Inventory @(New-Ns -Name 'cleanly-opted-out' -Labels @{
+                'istio-injection'         = 'disabled'
+                'istio.io/dataplane-mode' = 'ambient'
+            })
+
+        $findings = @(Test-NamespaceLabels -Inventory $inv)
+
+        ($findings | Where-Object CheckId -eq 'N-02').Count | Should -Be 0
+    }
+
+    It 'honors -ExcludeNamespace for N-02 as well' {
+        $inv = New-Inventory @(New-Ns -Name 'platform' -Labels @{
+                'istio-injection'         = 'enabled'
+                'istio.io/dataplane-mode' = 'ambient'
+            })
+
+        $findings = @(Test-NamespaceLabels -Inventory $inv -ExcludeNamespace 'platform')
+
+        $findings.Count | Should -Be 0
+    }
+}

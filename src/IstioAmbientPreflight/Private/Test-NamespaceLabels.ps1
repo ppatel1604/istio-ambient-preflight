@@ -1,22 +1,30 @@
 function Test-NamespaceLabels {
     <#
     .SYNOPSIS
-        N-01: Flags namespaces that are not enrolled in the ambient dataplane and
-        have not explicitly opted out.
+        Namespace-label checks for ambient readiness.
 
     .DESCRIPTION
-        Istio Ambient mode enrolls workloads by labeling the namespace with
-        istio.io/dataplane-mode=ambient. A namespace with no dataplane-mode
-        label is silently excluded from the mesh after migration. Users who
-        *intend* to exclude a namespace should set istio.io/dataplane-mode=none
-        so the exclusion is explicit, reviewable, and survives label audits.
+        Runs every namespace-label check in a single pass over the inventory.
+        Today this covers:
 
-        This check emits one Warning finding per application namespace that has
-        neither label value. System namespaces are skipped.
+          - N-01 (Warning, Labels):
+              Flags namespaces with no istio.io/dataplane-mode label. After
+              migration such namespaces are silently excluded from the mesh.
+              Namespaces that have explicitly opted out with
+              istio.io/dataplane-mode=none are considered compliant.
 
-        CheckId:  N-01
-        Category: Labels
-        Severity: Warning
+          - N-02 (Blocker, Labels):
+              Flags namespaces that are simultaneously enrolled in sidecar
+              injection (istio-injection=enabled) and the ambient dataplane
+              (istio.io/dataplane-mode=ambient). Istio's documented practice
+              is one mode per namespace; the mixed state typically indicates
+              an incomplete migration and produces ambiguous behavior for
+              workloads scheduled into the namespace.
+
+        System namespaces (kube-system, kube-public, kube-node-lease,
+        istio-system, cilium) are skipped, as are any names supplied via
+        -ExcludeNamespace.
+
         Reference: https://istio.io/latest/docs/ambient/usage/add-workloads/
 
     .PARAMETER Inventory
@@ -81,14 +89,45 @@ function Test-NamespaceLabels {
         }
 
         $mode = $null
+        $injection = $null
         if ($labels) {
             $modeProp = $labels.PSObject.Properties['istio.io/dataplane-mode']
             if ($modeProp) { $mode = $modeProp.Value }
+
+            $injectionProp = $labels.PSObject.Properties['istio-injection']
+            if ($injectionProp) { $injection = $injectionProp.Value }
         }
 
+        # N-02: conflicting labels. Check before N-01 -- a namespace that has
+        # both labels is in the ambient set, so N-01 would not fire anyway,
+        # but the ordering also documents that the Blocker case is the one
+        # that preempts the Warning.
+        if ($mode -eq 'ambient' -and $injection -eq 'enabled') {
+            $n02Message = @(
+                "Namespace '$name' is labeled for BOTH sidecar injection (istio-injection=enabled)"
+                "and the ambient dataplane (istio.io/dataplane-mode=ambient)."
+                "Istio's documented practice is one mode per namespace; mixed labels produce"
+                "ambiguous behavior and typically indicate an incomplete migration."
+                "Remove the 'istio-injection' label"
+                "('kubectl label namespace $name istio-injection-') before enabling ambient"
+                "on production workloads."
+            ) -join ' '
+
+            Format-Finding `
+                -Severity 'Blocker' `
+                -Category 'Labels' `
+                -CheckId  'N-02' `
+                -Resource "Namespace/$name" `
+                -Message  $n02Message `
+                -DocLink  'https://istio.io/latest/docs/ambient/usage/add-workloads/'
+
+            continue
+        }
+
+        # N-01: missing or non-explicit dataplane-mode.
         if ($mode -eq 'ambient' -or $mode -eq 'none') { continue }
 
-        $message = @(
+        $n01Message = @(
             "Namespace '$name' has no 'istio.io/dataplane-mode' label."
             "Workloads here will not be enrolled in the ambient mesh after migration."
             "Apply 'kubectl label namespace $name istio.io/dataplane-mode=ambient' to enroll,"
@@ -100,7 +139,7 @@ function Test-NamespaceLabels {
             -Category 'Labels' `
             -CheckId  'N-01' `
             -Resource "Namespace/$name" `
-            -Message  $message `
+            -Message  $n01Message `
             -DocLink  'https://istio.io/latest/docs/ambient/usage/add-workloads/'
     }
 }

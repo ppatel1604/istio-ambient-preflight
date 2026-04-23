@@ -19,6 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Test-NamespaceLabels` private helper — **first real check (N-01)**:
   Warning for namespaces missing `istio.io/dataplane-mode=ambient` and not
   explicitly opted out with `...=none`. System namespaces are skipped.
+- **Check N-02** (Blocker, Labels) in `Test-NamespaceLabels`: flags
+  namespaces that are labeled with BOTH `istio-injection=enabled` and
+  `istio.io/dataplane-mode=ambient`. Istio's documented practice is one
+  mode per namespace; the mixed state typically indicates an incomplete
+  migration and produces ambiguous behavior. `istio-injection=disabled`
+  paired with ambient is not flagged. N-02 preempts N-01 for the same
+  namespace. Honors `-ExcludeNamespace`.
+- `tests/Integration/fixtures/` — staged YAML for a local kind cluster
+  that reliably triggers N-01, N-02, and C-02 (ambient-labeled namespace,
+  namespace with conflicting labels, CiliumNetworkPolicy missing TCP/15008).
+  Not yet wired into CI — see the fixtures README for local setup.
 - `Test-CiliumPolicyCompatibility` private helper — **check C-02**:
   Blocker for any CiliumNetworkPolicy in an ambient-enrolled namespace
   whose ingress rules do not admit ztunnel HBONE traffic on TCP port

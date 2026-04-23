@@ -48,9 +48,22 @@ Invoke-AmbientPreflight -Context my-cluster -OutputPath ./reports/prod.md
 # Filter to a specific namespace
 Invoke-AmbientPreflight -Namespace payments
 
-# Suppress expected noise from infrastructure namespaces
+# Scanning a local kind cluster? Suppress expected noise from its
+# infrastructure namespace.
+Invoke-AmbientPreflight -ExcludeNamespace local-path-storage
+
+# Or suppress multiple operational namespaces on a managed cluster.
 Invoke-AmbientPreflight -ExcludeNamespace argocd, monitoring, cert-manager
 ```
+
+### Parameters
+
+| Parameter | Purpose |
+|---|---|
+| `-Context` | kubectl context to target. Defaults to the current context. |
+| `-OutputPath` | Markdown report path. Defaults to `./ambient-preflight-report.md`. |
+| `-Namespace` | Scope checks to a single namespace. |
+| `-ExcludeNamespace` | Extra namespaces to skip during namespace-label checks, on top of the built-in system list (`kube-system`, `kube-public`, `kube-node-lease`, `istio-system`, `cilium`). |
 
 Prerequisites:
 
@@ -62,6 +75,22 @@ Prerequisites:
 See [`examples/demo-cluster/sample-report.md`](./examples/demo-cluster/sample-report.md) for a full example. A snippet:
 
 ```markdown
+# Istio Ambient Preflight Report
+
+**Generated:** 2026-04-22T14:10:03Z
+**Context:** demo-prod
+**Verdict:** Blocked
+
+## Summary
+
+| Severity | Count |
+|---|---|
+| 🔴 Blocker | 2 |
+| 🟡 Warning | 3 |
+| 🔵 Info | 0 |
+
+## 🔴 Blockers
+
 ### C-02 · Network · CiliumNetworkPolicy/allow-frontend in namespace payments
 
 CiliumNetworkPolicy 'allow-frontend' in ambient namespace 'payments' declares
@@ -81,13 +110,13 @@ to an Istio AuthorizationPolicy.
 | ID | Check | Category | Severity |
 |---|---|---|---|
 | N-01 | Namespaces missing `istio.io/dataplane-mode=ambient` (and not explicitly opted out with `=none`) | Labels | Warning |
+| N-02 | Namespaces with conflicting labels (both `istio-injection=enabled` and `istio.io/dataplane-mode=ambient`) | Labels | Blocker |
 | C-02 | CiliumNetworkPolicies in ambient namespaces that do not allow TCP/15008 for ztunnel HBONE traffic | Network | Blocker |
 
 ### Planned for v0.1
 
 | ID | Check | Category | Severity |
 |---|---|---|---|
-| N-02 | Namespaces with conflicting labels (both `istio-injection=enabled` and ambient) | Labels | Blocker |
 | P-01 | Pods explicitly opted out via `istio.io/dataplane-mode=none` in ambient namespaces | Labels | Info |
 | P-02 | Pods with existing sidecar injection labels that will no-op in ambient | Labels | Info |
 | C-01 | Cilium NetworkPolicies using pod-selector ingress that will fail with waypoint-routed traffic | Network | Blocker |
