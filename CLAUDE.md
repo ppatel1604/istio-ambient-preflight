@@ -98,6 +98,7 @@ istio-ambient-preflight/
 │           ├── Invoke-Kubectl.ps1
 │           ├── Get-ClusterInventory.ps1
 │           ├── Test-NamespaceLabels.ps1
+│           ├── Test-PodLabels.ps1
 │           ├── Test-CiliumPolicyCompatibility.ps1
 │           ├── Test-GatewayConflict.ps1
 │           └── Format-Finding.ps1
@@ -128,19 +129,21 @@ istio-ambient-preflight/
 
 ## Build Order (Suggested)
 
-**Current status (2026-04-24):** steps 1–5 are complete. The scaffold,
+**Current status (2026-04-25):** steps 1–5 are complete. The scaffold,
 `Invoke-Kubectl` wrapper, `Get-ClusterInventory`, `Format-Finding`,
 `New-AmbientMigrationReport`, and the `Invoke-AmbientPreflight`
-orchestrator are all in place and covered by Pester unit tests. Three
+orchestrator are all in place and covered by Pester unit tests. Five
 checks are implemented against that pattern: **N-01** (Warning — namespace
 missing `istio.io/dataplane-mode` label), **N-02** (Blocker — conflicting
-`istio-injection=enabled` + `istio.io/dataplane-mode=ambient` labels), and
-**C-02** (Blocker — CiliumNetworkPolicy in an ambient namespace that does
-not allow TCP/15008 for ztunnel HBONE traffic). Remaining v0.1 work: the
-P-/C-01/G- checks in step 6, a proper kind-based integration harness
-(step 7 — fixture YAML is staged under `tests/Integration/fixtures/` but
-not yet wired into CI), README polish (step 8), and the v0.1.0 release
-(step 9).
+`istio-injection=enabled` + `istio.io/dataplane-mode=ambient` labels),
+**P-01** (Info — pod with `istio.io/dataplane-mode=none` in an ambient
+namespace), **P-02** (Info — pod in an ambient namespace still carrying
+sidecar-injection configuration), and **C-02** (Blocker —
+CiliumNetworkPolicy in an ambient namespace that does not allow TCP/15008
+for ztunnel HBONE traffic). Remaining v0.1 work: the C-01/G- checks in
+step 6, a proper kind-based integration harness (step 7 — fixture YAML is
+staged under `tests/Integration/fixtures/` but not yet wired into CI),
+README polish (step 8), and the v0.1.0 release (step 9).
 
 1. Repo scaffold: license, readme skeleton, module manifest, directory structure, .gitignore, GitHub Actions stub
 2. `Invoke-Kubectl` wrapper + `Get-ClusterInventory` — foundation
@@ -162,3 +165,15 @@ not yet wired into CI), README polish (step 8), and the v0.1.0 release
 ## Contact & Strategy
 
 The README should direct interested users to the author's LinkedIn for consulting inquiries. The tool is the top of the funnel; consulting engagements are the monetization.
+
+## Session conventions
+
+- End every session with a git commit. Commit message should reference
+  what was shipped (e.g. "feat: add N-02 conflicting labels check" or
+  "docs: sync README/ROADMAP with implemented checks").
+- At the end of every session that changes code, ensure README.md,
+  ROADMAP.md, CHANGELOG.md (Unreleased), and CLAUDE.md (if conventions
+  shifted) are in sync with the new state. Do not wait for an explicit
+  "docs sync" session.
+- Before starting work in a fresh session, read CLAUDE.md, ROADMAP.md,
+  CHANGELOG.md, README.md to orient.

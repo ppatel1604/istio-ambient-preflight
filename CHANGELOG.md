@@ -35,6 +35,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   whose ingress rules do not admit ztunnel HBONE traffic on TCP port
   15008. Policies in non-ambient namespaces and egress-only policies are
   ignored. No-ops silently when the Cilium CRD is not installed.
+- `Test-PodLabels` private helper — **checks P-01 and P-02**:
+  - **P-01** (Info, Pods): flags pods labeled
+    `istio.io/dataplane-mode=none` inside an ambient-enrolled namespace.
+    These pods will bypass the mesh; the finding makes the exclusion
+    visible in migration planning so it stays an intentional choice.
+  - **P-02** (Info, Pods): flags pods in ambient namespaces that still
+    carry sidecar-injection configuration — either the
+    `sidecar.istio.io/inject=true` annotation on the pod, or an
+    `istio-injection=enabled` label on the namespace. Both reasons are
+    rolled into a single per-pod finding when both apply. P-02
+    deliberately overlaps with N-02 at the namespace level: N-02
+    addresses the platform team, P-02 the workload owner.
+- `Invoke-AmbientPreflight` now also runs `Test-PodLabels` as part of
+  the compatibility-check phase.
+- Session conventions documented in CLAUDE.md: end every session with a
+  commit, keep README/ROADMAP/CHANGELOG in sync as code changes (no
+  trailing "docs sync" sessions), and start fresh sessions by re-reading
+  the four context docs.
 - `-ExcludeNamespace` parameter on `Invoke-AmbientPreflight` and
   `Test-NamespaceLabels`: appends user-supplied names to the built-in
   system-namespace skip list (kube-system, kube-public, kube-node-lease,
@@ -51,7 +69,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Invoke-AmbientPreflight` and `New-AmbientMigrationReport`.
 - Pester 5 unit test harness with mocked kubectl (Format-Finding,
   Invoke-Kubectl, Get-ClusterInventory, Test-NamespaceLabels,
-  New-AmbientMigrationReport).
+  Test-CiliumPolicyCompatibility, Test-PodLabels,
+  New-AmbientMigrationReport, Invoke-AmbientPreflight).
 - Integration smoke test under `tests/Integration/` that runs
   `Invoke-AmbientPreflight` against the current kubectl context.
   Runtime-skipped when kubectl or a live cluster is unavailable.

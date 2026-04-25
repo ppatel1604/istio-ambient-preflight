@@ -107,6 +107,9 @@ function Invoke-AmbientPreflight {
     foreach ($finding in @(Test-NamespaceLabels @namespaceLabelParams)) {
         $findings.Add($finding)
     }
+    foreach ($finding in @(Test-PodLabels @checkParams)) {
+        $findings.Add($finding)
+    }
     foreach ($finding in @(Test-CiliumPolicyCompatibility -Inventory $inventory)) {
         $findings.Add($finding)
     }
