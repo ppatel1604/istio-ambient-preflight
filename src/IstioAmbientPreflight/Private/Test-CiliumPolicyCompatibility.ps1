@@ -1,33 +1,47 @@
 function Test-CiliumPolicyCompatibility {
     <#
     .SYNOPSIS
-        C-02: Flags CiliumNetworkPolicies in ambient-enrolled namespaces whose
-        ingress rules do not admit ztunnel HBONE traffic on TCP port 15008.
+        Cilium NetworkPolicy compatibility checks for ambient migration.
 
     .DESCRIPTION
-        In Istio Ambient mode, mesh traffic for a pod is terminated on the
-        destination node by ztunnel, which receives tunneled traffic over HBONE
-        on TCP port 15008 before handing it off to the workload. A Cilium
-        NetworkPolicy in an ambient-labeled namespace that declares ingress
-        rules without allowing TCP/15008 will silently drop mesh traffic after
-        migration: the policy looks correct for direct pod-to-pod calls, but
-        the actual packets now arrive from ztunnel on port 15008.
+        Runs every CiliumNetworkPolicy-level check in a single pass over the
+        inventory. Today this covers:
 
-        A policy is considered compliant when it has no ingress section or an
-        empty one (the policy does not restrict ingress, so ztunnel is
-        implicitly permitted), OR when at least one ingress rule allows TCP
-        port 15008. An ingress rule allows TCP/15008 when either:
-          - it has no toPorts (any port is allowed on that rule), or
-          - it has a toPorts entry whose protocol is TCP or unspecified and
-            whose port is 15008, or whose [port, endPort] range covers 15008.
+          - C-01 (Blocker, Network):
+              Ambient-mode pod-to-pod traffic is sourced from the waypoint
+              proxy's identity, not the original client pod. A
+              CiliumNetworkPolicy whose ingress rules restrict source by
+              pod-selector matchLabels (e.g. 'app=frontend') will silently
+              drop waypoint-routed traffic after migration -- the policy
+              was authored against pre-ambient identities and still parses
+              cleanly, so the failure mode is invisible. C-01 fires when a
+              policy in an ambient namespace has at least one
+              'fromEndpoints' rule with a non-empty matchLabels that does
+              NOT mention any waypoint-identity label
+              ('istio.io/gateway-name' or 'istio.io/waypoint-for'). If any
+              fromEndpoints anywhere in the policy already references one
+              of those labels, the operator has clearly thought about
+              waypoints and the finding is suppressed.
 
-        Policies outside ambient-labeled namespaces are skipped: they are not
-        yet affected by the migration.
+          - C-02 (Blocker, Network):
+              In ambient mode, mesh traffic for a pod is terminated on the
+              destination node by ztunnel, which receives tunneled traffic
+              over HBONE on TCP/15008 before handing it off to the workload.
+              A CiliumNetworkPolicy in an ambient-labeled namespace that
+              declares ingress rules without allowing TCP/15008 will
+              silently drop mesh traffic after migration. A policy is
+              compliant when it has no ingress section (no ingress
+              restriction at all), or when at least one ingress rule
+              explicitly admits TCP/15008 (or covers 15008 via a port range).
 
-        CheckId:  C-02
-        Category: Network
-        Severity: Blocker
-        Reference: https://istio.io/latest/docs/ambient/architecture/traffic-redirection/
+        Policies in non-ambient namespaces are skipped: they are not yet
+        affected by the migration. The function emits zero findings (and
+        no error) when CiliumNetworkPolicies is empty -- the typical case
+        for clusters that do not have the Cilium CRDs installed.
+
+        References:
+          - https://istio.io/latest/docs/ambient/usage/waypoint/
+          - https://istio.io/latest/docs/ambient/architecture/traffic-redirection/
 
     .PARAMETER Inventory
         The cluster inventory returned by Get-ClusterInventory.
@@ -77,12 +91,14 @@ function Test-CiliumPolicyCompatibility {
         }
 
         # No ingress section (or an empty one) means the policy does not
-        # restrict ingress; ztunnel traffic flows through unchallenged.
+        # restrict ingress; ztunnel traffic flows through unchallenged and
+        # there is no source-selector to mismatch the waypoint either.
         # Note: @($null) has Count 1 in PowerShell, so guard on $null first.
         if (-not $ingress) { continue }
         $ingressRules = @($ingress)
         if ($ingressRules.Count -eq 0) { continue }
 
+        # ---- C-02: ztunnel HBONE TCP/15008 must be reachable ----
         $allows15008 = $false
         foreach ($rule in $ingressRules) {
             if (-not $rule) { continue }
@@ -142,23 +158,92 @@ function Test-CiliumPolicyCompatibility {
             if ($allows15008) { break }
         }
 
-        if ($allows15008) { continue }
+        if (-not $allows15008) {
+            $c02Message = @(
+                "CiliumNetworkPolicy '$policyName' in ambient namespace '$policyNs' declares ingress rules"
+                "but does not allow TCP port 15008. In ambient mode, mesh traffic arrives on the destination"
+                "node via ztunnel using HBONE on TCP/15008; this policy will silently drop mesh traffic after"
+                "migration. Add an ingress rule that permits TCP/15008 from the ztunnel DaemonSet (for example,"
+                "select 'k8s:io.cilium.k8s.namespace.labels.kubernetes.io/metadata.name=istio-system' with"
+                "toPorts port 15008), or migrate the L7 controls to an Istio AuthorizationPolicy."
+            ) -join ' '
 
-        $message = @(
-            "CiliumNetworkPolicy '$policyName' in ambient namespace '$policyNs' declares ingress rules"
-            "but does not allow TCP port 15008. In ambient mode, mesh traffic arrives on the destination"
-            "node via ztunnel using HBONE on TCP/15008; this policy will silently drop mesh traffic after"
-            "migration. Add an ingress rule that permits TCP/15008 from the ztunnel DaemonSet (for example,"
-            "select 'k8s:io.cilium.k8s.namespace.labels.kubernetes.io/metadata.name=istio-system' with"
-            "toPorts port 15008), or migrate the L7 controls to an Istio AuthorizationPolicy."
-        ) -join ' '
+            Format-Finding `
+                -Severity 'Blocker' `
+                -Category 'Network' `
+                -CheckId  'C-02' `
+                -Resource "CiliumNetworkPolicy/$policyName in namespace $policyNs" `
+                -Message  $c02Message `
+                -DocLink  'https://istio.io/latest/docs/ambient/architecture/traffic-redirection/'
+        }
 
-        Format-Finding `
-            -Severity 'Blocker' `
-            -Category 'Network' `
-            -CheckId  'C-02' `
-            -Resource "CiliumNetworkPolicy/$policyName in namespace $policyNs" `
-            -Message  $message `
-            -DocLink  'https://istio.io/latest/docs/ambient/architecture/traffic-redirection/'
+        # ---- C-01: fromEndpoints pod-selector must account for waypoint identity ----
+        # Walk every fromEndpoints across every ingress rule once. Track
+        # whether the policy author has already considered waypoint
+        # identity (any matchLabels referencing istio.io/gateway-name or
+        # istio.io/waypoint-for) and whether at least one fromEndpoints
+        # restricts to specific pod labels that lack those keys.
+        $hasWaypointSelector = $false
+        $hasPodOnlySelector  = $false
+        foreach ($rule in $ingressRules) {
+            if (-not $rule) { continue }
+
+            $fromEndpoints = $null
+            if ($rule.PSObject.Properties.Name -contains 'fromEndpoints') {
+                $fromEndpoints = $rule.fromEndpoints
+            }
+            foreach ($from in @($fromEndpoints)) {
+                if (-not $from) { continue }
+
+                $matchLabels = $null
+                if ($from.PSObject.Properties.Name -contains 'matchLabels') {
+                    $matchLabels = $from.matchLabels
+                }
+                if (-not $matchLabels) { continue }
+
+                # An empty matchLabels object means "any endpoint" (no
+                # restriction beyond the rule itself); waypoint traffic
+                # matches it implicitly, so it counts as neither a
+                # waypoint-aware selector nor a pod-only selector.
+                # Note: @($matchLabels.PSObject.Properties.Name).Count is
+                # 1 (not 0) when there are no properties, because
+                # @($null) wraps to a single-element array. Count the
+                # Properties collection directly instead.
+                $properties = @($matchLabels.PSObject.Properties)
+                if ($properties.Count -eq 0) { continue }
+                $labelKeys = @($properties | ForEach-Object Name)
+
+                $rulePicksWaypoint =
+                    ($labelKeys -contains 'istio.io/gateway-name') -or
+                    ($labelKeys -contains 'istio.io/waypoint-for')
+
+                if ($rulePicksWaypoint) {
+                    $hasWaypointSelector = $true
+                } else {
+                    $hasPodOnlySelector = $true
+                }
+            }
+        }
+
+        if ($hasPodOnlySelector -and -not $hasWaypointSelector) {
+            $c01Message = @(
+                "CiliumNetworkPolicy '$policyName' in ambient namespace '$policyNs' restricts ingress by"
+                "pod-selector matchLabels (for example, allowing only sources like 'app=frontend'). In"
+                "ambient mode with a waypoint proxy, mesh traffic arrives at the destination from the"
+                "waypoint pod's identity rather than the original client; the original pod labels are no"
+                "longer present on the connection, so this policy will silently drop waypoint-routed traffic"
+                "after migration. Either add a fromEndpoints rule that admits the waypoint via its"
+                "'istio.io/gateway-name' label, or migrate L7 source-identity controls to an Istio"
+                "AuthorizationPolicy (which evaluates against the original peer identity)."
+            ) -join ' '
+
+            Format-Finding `
+                -Severity 'Blocker' `
+                -Category 'Network' `
+                -CheckId  'C-01' `
+                -Resource "CiliumNetworkPolicy/$policyName in namespace $policyNs" `
+                -Message  $c01Message `
+                -DocLink  'https://istio.io/latest/docs/ambient/usage/waypoint/'
+        }
     }
 }

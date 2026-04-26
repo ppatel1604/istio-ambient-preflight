@@ -113,13 +113,13 @@ to an Istio AuthorizationPolicy.
 | N-02 | Namespaces with conflicting labels (both `istio-injection=enabled` and `istio.io/dataplane-mode=ambient`) | Labels | Blocker |
 | P-01 | Pods explicitly opted out via `istio.io/dataplane-mode=none` in ambient namespaces | Pods | Info |
 | P-02 | Pods in ambient namespaces still carrying sidecar-injection configuration (`sidecar.istio.io/inject=true` annotation, or namespace `istio-injection=enabled`) | Pods | Info |
+| C-01 | CiliumNetworkPolicies in ambient namespaces using pod-selector `fromEndpoints` ingress that won't match waypoint-sourced traffic | Network | Blocker |
 | C-02 | CiliumNetworkPolicies in ambient namespaces that do not allow TCP/15008 for ztunnel HBONE traffic | Network | Blocker |
 
 ### Planned for v0.1
 
 | ID | Check | Category | Severity |
 |---|---|---|---|
-| C-01 | Cilium NetworkPolicies using pod-selector ingress that will fail with waypoint-routed traffic | Network | Blocker |
 | G-01 | Mixed Istio Gateway + Gateway API resources on overlapping hosts | Ingress | Blocker |
 | G-02 | VirtualServices referencing gateways that don't exist | Ingress | Warning |
 

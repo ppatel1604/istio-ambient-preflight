@@ -30,11 +30,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that reliably triggers N-01, N-02, and C-02 (ambient-labeled namespace,
   namespace with conflicting labels, CiliumNetworkPolicy missing TCP/15008).
   Not yet wired into CI — see the fixtures README for local setup.
-- `Test-CiliumPolicyCompatibility` private helper — **check C-02**:
-  Blocker for any CiliumNetworkPolicy in an ambient-enrolled namespace
-  whose ingress rules do not admit ztunnel HBONE traffic on TCP port
-  15008. Policies in non-ambient namespaces and egress-only policies are
-  ignored. No-ops silently when the Cilium CRD is not installed.
+- `Test-CiliumPolicyCompatibility` private helper — **checks C-01 and
+  C-02**:
+  - **C-02** (Blocker, Network): flags any CiliumNetworkPolicy in an
+    ambient-enrolled namespace whose ingress rules do not admit ztunnel
+    HBONE traffic on TCP port 15008. Policies in non-ambient namespaces
+    and egress-only policies are ignored.
+  - **C-01** (Blocker, Network): flags policies in ambient namespaces
+    whose `fromEndpoints` rules restrict source by pod-selector
+    matchLabels (e.g. `app=frontend`) without referencing a waypoint
+    identity (`istio.io/gateway-name` or `istio.io/waypoint-for`). After
+    migration the original pod identity is replaced by the waypoint's,
+    so these policies silently drop waypoint-sourced traffic. The check
+    suppresses when the policy already has at least one
+    waypoint-aware fromEndpoints, signalling that the operator
+    considered ambient.
+  - Both checks fire independently on the same policy when both
+    conditions apply (verified in tests).
+  - The whole helper no-ops silently when the Cilium CRD is not
+    installed.
 - `Test-PodLabels` private helper — **checks P-01 and P-02**:
   - **P-01** (Info, Pods): flags pods labeled
     `istio.io/dataplane-mode=none` inside an ambient-enrolled namespace.

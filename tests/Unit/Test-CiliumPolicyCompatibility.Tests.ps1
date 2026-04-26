@@ -24,10 +24,11 @@ BeforeAll {
     }
 
     # Shape mirrors `kubectl get ciliumnetworkpolicies -o json` items. The
-    # fixture supports: no ingress section, ingress rules without toPorts,
-    # and ingress rules with toPorts whose ports are Cilium's
-    # { port: "15008"; protocol: TCP } shape (port is a *string* in Cilium's
-    # schema — see docs.cilium.io/en/stable/security/policy/language/#layer-4-examples).
+    # fixture supports: no ingress section, ingress rules with or without
+    # toPorts, and ingress rules with or without fromEndpoints. Cilium's
+    # port shape is { port: "15008"; protocol: TCP } -- port is a string
+    # in Cilium's schema (see docs.cilium.io/en/stable/security/policy/
+    # language/#layer-4-examples).
     function New-CiliumPolicy {
         param(
             [Parameter(Mandatory)][string]$Name,
@@ -49,13 +50,18 @@ BeforeAll {
         }
     }
 
+    # If -FromMatchLabels is omitted the rule has no fromEndpoints at all
+    # (i.e. no source restriction); this keeps C-02-only tests focused on
+    # the port aspect without accidentally tripping C-01.
     function New-IngressRule {
-        param([object[]]$ToPorts)
-        $obj = [ordered]@{
-            fromEndpoints = @(
-                [pscustomobject]@{
-                    matchLabels = [pscustomobject]@{ 'app' = 'frontend' }
-                }
+        param(
+            [object[]]$ToPorts,
+            [hashtable]$FromMatchLabels
+        )
+        $obj = [ordered]@{}
+        if ($PSBoundParameters.ContainsKey('FromMatchLabels')) {
+            $obj.fromEndpoints = @(
+                [pscustomobject]@{ matchLabels = [pscustomobject]$FromMatchLabels }
             )
         }
         if ($PSBoundParameters.ContainsKey('ToPorts')) {
@@ -123,7 +129,9 @@ Describe 'Test-CiliumPolicyCompatibility (C-02)' {
     }
 
     It 'emits a Blocker when an ambient-namespace policy has ingress rules but does not allow TCP/15008' {
-        $policy = New-CiliumPolicy -Name 'allow-frontend' -Namespace 'payments' `
+        # No fromEndpoints on the rule (port-only), so this isolates the
+        # C-02 concern from the C-01 source-identity concern.
+        $policy = New-CiliumPolicy -Name 'allow-port' -Namespace 'payments' `
             -IngressRules @(
                 New-IngressRule -ToPorts @(
                     New-ToPorts -Ports @(
@@ -142,7 +150,7 @@ Describe 'Test-CiliumPolicyCompatibility (C-02)' {
         $findings[0].Severity | Should -Be 'Blocker'
         $findings[0].Category | Should -Be 'Network'
         $findings[0].CheckId  | Should -Be 'C-02'
-        $findings[0].Resource | Should -Be 'CiliumNetworkPolicy/allow-frontend in namespace payments'
+        $findings[0].Resource | Should -Be 'CiliumNetworkPolicy/allow-port in namespace payments'
         $findings[0].DocLink  | Should -Be 'https://istio.io/latest/docs/ambient/architecture/traffic-redirection/'
         $findings[0].Message  | Should -Match '15008'
         $findings[0].Message  | Should -Match 'ztunnel'
@@ -177,5 +185,178 @@ Describe 'Test-CiliumPolicyCompatibility (C-02)' {
 
         $findings = @(Test-CiliumPolicyCompatibility -Inventory $inv)
         $findings.Count | Should -Be 0
+    }
+}
+
+Describe 'Test-CiliumPolicyCompatibility (C-01)' {
+
+    It 'emits a Blocker when an ambient-namespace policy uses pod-selector ingress with no waypoint-identity label' {
+        # Classic pre-ambient policy: "allow ingress from any pod with
+        # app=frontend on port 15008" -- C-02 is satisfied (15008 is
+        # admitted) but the source selector won't match the waypoint pod.
+        $policy = New-CiliumPolicy -Name 'pod-only' -Namespace 'payments' `
+            -IngressRules @(
+                New-IngressRule `
+                    -FromMatchLabels @{ 'app' = 'frontend' } `
+                    -ToPorts @(New-ToPorts -Ports @(New-Port -Port '15008' -Protocol 'TCP'))
+            )
+
+        $inv = New-Inventory `
+            -Namespaces @(New-Ns -Name 'payments' -DataplaneMode 'ambient') `
+            -CiliumNetworkPolicies @($policy)
+
+        $findings = @(Test-CiliumPolicyCompatibility -Inventory $inv)
+
+        $c01 = @($findings | Where-Object CheckId -eq 'C-01')
+        $c01.Count       | Should -Be 1
+        $c01[0].Severity | Should -Be 'Blocker'
+        $c01[0].Category | Should -Be 'Network'
+        $c01[0].Resource | Should -Be 'CiliumNetworkPolicy/pod-only in namespace payments'
+        $c01[0].DocLink  | Should -Be 'https://istio.io/latest/docs/ambient/usage/waypoint/'
+        $c01[0].Message  | Should -Match 'waypoint'
+        $c01[0].Message  | Should -Match 'AuthorizationPolicy'
+    }
+
+    It 'emits no C-01 when fromEndpoints already selects the waypoint via istio.io/gateway-name' {
+        # The operator has authored a policy that admits the waypoint
+        # explicitly. The selector reflects ambient awareness, so C-01
+        # has nothing to flag.
+        $policy = New-CiliumPolicy -Name 'allow-waypoint' -Namespace 'payments' `
+            -IngressRules @(
+                New-IngressRule `
+                    -FromMatchLabels @{ 'istio.io/gateway-name' = 'payments-waypoint' } `
+                    -ToPorts @(New-ToPorts -Ports @(New-Port -Port '15008' -Protocol 'TCP'))
+            )
+
+        $inv = New-Inventory `
+            -Namespaces @(New-Ns -Name 'payments' -DataplaneMode 'ambient') `
+            -CiliumNetworkPolicies @($policy)
+
+        $findings = @(Test-CiliumPolicyCompatibility -Inventory $inv)
+
+        ($findings | Where-Object CheckId -eq 'C-01').Count | Should -Be 0
+    }
+
+    It 'emits no C-01 when fromEndpoints includes the istio.io/waypoint-for label' {
+        $policy = New-CiliumPolicy -Name 'allow-waypoint-for' -Namespace 'payments' `
+            -IngressRules @(
+                New-IngressRule `
+                    -FromMatchLabels @{ 'istio.io/waypoint-for' = 'service' } `
+                    -ToPorts @(New-ToPorts -Ports @(New-Port -Port '15008' -Protocol 'TCP'))
+            )
+
+        $inv = New-Inventory `
+            -Namespaces @(New-Ns -Name 'payments' -DataplaneMode 'ambient') `
+            -CiliumNetworkPolicies @($policy)
+
+        $findings = @(Test-CiliumPolicyCompatibility -Inventory $inv)
+
+        ($findings | Where-Object CheckId -eq 'C-01').Count | Should -Be 0
+    }
+
+    It 'emits no C-01 in a non-ambient namespace, even when pod-selector ingress is present' {
+        $policy = New-CiliumPolicy -Name 'pod-only' -Namespace 'legacy' `
+            -IngressRules @(
+                New-IngressRule `
+                    -FromMatchLabels @{ 'app' = 'frontend' } `
+                    -ToPorts @(New-ToPorts -Ports @(New-Port -Port '8080' -Protocol 'TCP'))
+            )
+
+        $inv = New-Inventory `
+            -Namespaces @(New-Ns -Name 'legacy') `
+            -CiliumNetworkPolicies @($policy)
+
+        $findings = @(Test-CiliumPolicyCompatibility -Inventory $inv)
+
+        $findings.Count | Should -Be 0
+    }
+
+    It 'emits no C-01 when fromEndpoints matchLabels is empty (any-pod selector)' {
+        # `fromEndpoints: [{}]` permits any endpoint -- waypoint-sourced
+        # traffic matches as well. There is no pod-only restriction to flag.
+        $policy = New-CiliumPolicy -Name 'allow-any' -Namespace 'payments' `
+            -IngressRules @(
+                New-IngressRule `
+                    -FromMatchLabels @{} `
+                    -ToPorts @(New-ToPorts -Ports @(New-Port -Port '15008' -Protocol 'TCP'))
+            )
+
+        $inv = New-Inventory `
+            -Namespaces @(New-Ns -Name 'payments' -DataplaneMode 'ambient') `
+            -CiliumNetworkPolicies @($policy)
+
+        $findings = @(Test-CiliumPolicyCompatibility -Inventory $inv)
+
+        ($findings | Where-Object CheckId -eq 'C-01').Count | Should -Be 0
+    }
+
+    It 'emits no C-01 when the rule has no fromEndpoints at all (port-only restriction)' {
+        # A port-only rule does not restrict source identity, so the
+        # waypoint identity is implicitly admitted.
+        $policy = New-CiliumPolicy -Name 'port-only' -Namespace 'payments' `
+            -IngressRules @(
+                New-IngressRule -ToPorts @(
+                    New-ToPorts -Ports @(New-Port -Port '15008' -Protocol 'TCP')
+                )
+            )
+
+        $inv = New-Inventory `
+            -Namespaces @(New-Ns -Name 'payments' -DataplaneMode 'ambient') `
+            -CiliumNetworkPolicies @($policy)
+
+        $findings = @(Test-CiliumPolicyCompatibility -Inventory $inv)
+
+        $findings.Count | Should -Be 0
+    }
+
+    It 'emits no C-01 when the policy mixes a pod-only fromEndpoints with a waypoint-aware fromEndpoints' {
+        # Author has clearly thought about waypoint identity and admitted
+        # it via an additional fromEndpoints. C-01 suppresses.
+        $policy = New-CiliumPolicy -Name 'mixed' -Namespace 'payments' `
+            -IngressRules @(
+                New-IngressRule `
+                    -FromMatchLabels @{ 'app' = 'frontend' } `
+                    -ToPorts @(New-ToPorts -Ports @(New-Port -Port '15008' -Protocol 'TCP'))
+                New-IngressRule `
+                    -FromMatchLabels @{ 'istio.io/gateway-name' = 'payments-waypoint' } `
+                    -ToPorts @(New-ToPorts -Ports @(New-Port -Port '15008' -Protocol 'TCP'))
+            )
+
+        $inv = New-Inventory `
+            -Namespaces @(New-Ns -Name 'payments' -DataplaneMode 'ambient') `
+            -CiliumNetworkPolicies @($policy)
+
+        $findings = @(Test-CiliumPolicyCompatibility -Inventory $inv)
+
+        ($findings | Where-Object CheckId -eq 'C-01').Count | Should -Be 0
+    }
+}
+
+Describe 'Test-CiliumPolicyCompatibility (C-01 + C-02 overlap)' {
+
+    It 'emits both C-01 and C-02 for an ambient policy that has pod-selector ingress AND no 15008 allowance' {
+        # Both checks must fire on the same policy without suppressing
+        # each other -- they describe distinct migration risks (port
+        # reachability vs. source-identity mismatch) and an operator
+        # needs both signals.
+        $policy = New-CiliumPolicy -Name 'classic-l4' -Namespace 'payments' `
+            -IngressRules @(
+                New-IngressRule `
+                    -FromMatchLabels @{ 'app' = 'frontend' } `
+                    -ToPorts @(New-ToPorts -Ports @(New-Port -Port '8080' -Protocol 'TCP'))
+            )
+
+        $inv = New-Inventory `
+            -Namespaces @(New-Ns -Name 'payments' -DataplaneMode 'ambient') `
+            -CiliumNetworkPolicies @($policy)
+
+        $findings = @(Test-CiliumPolicyCompatibility -Inventory $inv)
+
+        $findings.Count                                   | Should -Be 2
+        ($findings | ForEach-Object CheckId | Sort-Object) | Should -Be @('C-01', 'C-02')
+        ($findings | ForEach-Object Severity | Sort-Object -Unique) | Should -Be @('Blocker')
+        ($findings | ForEach-Object Resource | Sort-Object -Unique) | Should -Be @(
+            'CiliumNetworkPolicy/classic-l4 in namespace payments'
+        )
     }
 }
