@@ -1,10 +1,14 @@
 # Roadmap
 
-## v0.1 — MVP (target: 2 weekends of focused work)
+## v0.1.0 — Released 2026-04-27
 
-**Goal:** A working tool that scans a cluster, runs 6+ checks, and produces a useful markdown report. Shippable to PowerShell Gallery.
+**Goal:** A working tool that scans a cluster, runs 6+ checks, and
+produces a useful markdown report. Shippable to PowerShell Gallery.
 
-### Completed
+**Status:** released. See [`CHANGELOG.md`](./CHANGELOG.md) for the full
+0.1.0 entry.
+
+### Shipped checks
 
 - [x] **N-01** Namespace missing `istio.io/dataplane-mode=ambient` label (Warning)
 - [x] **N-02** Namespace has conflicting labels (both `istio-injection=enabled` and `istio.io/dataplane-mode=ambient`) (Blocker)
@@ -13,45 +17,48 @@
 - [x] **C-01** Cilium NetworkPolicy using pod-selector `fromEndpoints` ingress that will fail with waypoint-routed traffic (Blocker)
 - [x] **C-02** Cilium NetworkPolicy missing allowances for ztunnel traffic on port 15008 (Blocker)
 
+### Shipped foundation + quality
+
+- [x] Module scaffold + manifest, public/private layout
+- [x] `Invoke-Kubectl`, `Get-ClusterInventory`, `Format-Finding`,
+      `New-AmbientMigrationReport`, `Invoke-AmbientPreflight`
+- [x] Pester unit tests for every Public and Private function (78 cases)
+- [x] PSScriptAnalyzer clean against `./src`
+- [x] GitHub Actions CI: lint + unit tests on Ubuntu **and** Windows
+- [x] kind-based fixture set with idempotent setup/teardown scripts that
+      exercise every shipped check end-to-end
+- [x] `examples/sample-report.md` captured from the fixture cluster
+- [x] `build/Publish-Module.ps1` dry-run + `RELEASING.md` runbook
+
+### Carried forward
+
+The following v0.1 stretch items are deferred to v0.2:
+
+- [ ] Demo GIF / screencast in the README (placeholder in place; recipe
+      lives at `docs/demo-script.md`)
+- [ ] Wiring `tests/Integration/` into a CI integration job
+
+## v0.2 — Patch generation, ingress checks, CI integration
+
+**Goal:** Move from advisory to actionable, and round out the check
+library on the ingress side.
+
 ### Checks to implement
 
-- [ ] **G-01** Mixed Istio Gateway + Gateway API resources on overlapping hosts (Blocker)
-- [ ] **G-02** VirtualServices referencing gateways that don't exist (Warning)
+- [ ] **G-01** Mixed Istio Gateway + Gateway API resources on overlapping
+      hosts (Blocker)
+- [ ] **G-02** VirtualServices referencing gateways that don't exist
+      (Warning)
+- [ ] Expanded check library (target ~15 total)
 
-### Foundation
-
-- [x] Module scaffold + manifest
-- [x] `Invoke-Kubectl` wrapper (handles context, JSON parsing, error paths)
-- [x] `Get-ClusterInventory` — single pass of cluster state, cached for all checks
-- [x] `Format-Finding` — canonical finding object shape
-- [x] `New-AmbientMigrationReport` — markdown writer with severity grouping
-- [x] `Invoke-AmbientPreflight` — top-level orchestrator
-
-### Quality
-
-- [x] Pester unit tests for every Public and Private function
-- [ ] Integration test harness: `kind` cluster with Istio ambient, Cilium, and a sample app
-- [x] GitHub Actions CI: PSScriptAnalyzer lint + Pester unit tests on every push and PR
-- [ ] PSScriptAnalyzer passes with zero warnings
-
-### Launch artifacts
-
-- [x] `examples/demo-cluster/sample-report.md` — realistic example output
-- [ ] Demo GIF or short screencast in the README
-- [ ] `CHANGELOG.md` with v0.1.0 entry
-- [ ] PowerShell Gallery publish
-- [ ] GitHub release with tag `v0.1.0`
-
-## v0.2 — Patch generation and CI integration
-
-**Goal:** Move from advisory to actionable. Generate the specific YAML patches teams need.
+### Features
 
 - [ ] `-GeneratePatches` flag on `Invoke-AmbientPreflight`
 - [ ] Namespace label patches as kubectl-ready YAML
 - [ ] ArgoCD-compatible Helm values diffs for common chart patterns
 - [ ] `-OutputFormat json` for CI/CD pipeline integration
 - [ ] Exit code semantics: 0 = ready, 1 = warnings, 2 = blockers
-- [ ] Expanded check library (aim for ~15 total)
+- [ ] Wire integration fixtures into a kind-based CI job
 
 ## v0.3 — Waypoint guidance
 

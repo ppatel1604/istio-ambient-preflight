@@ -1,23 +1,26 @@
-# Namespaces designed to exercise N-01, N-02, and C-02.
+# Fixture namespaces for the enriched preflight demo.
 #
-# demo-app     : ambient-labeled, correctly enrolled. Used as the parent
-#                namespace for the non-compliant CiliumNetworkPolicy that
-#                triggers C-02.
-# half-migrated: labeled for BOTH istio-injection=enabled and
-#                istio.io/dataplane-mode=ambient. Triggers N-02 (Blocker).
-# legacy       : no dataplane-mode label at all. Triggers N-01 (Warning).
+# payments         : ambient-labeled. Hosts the P-01 / C-01 / C-02
+#                    fixtures that exercise pod-level and Cilium-policy
+#                    checks.
+# legacy-injection : labeled BOTH istio-injection=enabled AND
+#                    istio.io/dataplane-mode=ambient -- fires N-02
+#                    (Blocker). Its pods also fire P-02 because the
+#                    namespace label combination is the trigger.
+# unlabeled-app    : no dataplane-mode label at all -- fires N-01
+#                    (Warning).
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: demo-app
+  name: payments
   labels:
     istio.io/dataplane-mode: ambient
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: half-migrated
+  name: legacy-injection
   labels:
     istio-injection: enabled
     istio.io/dataplane-mode: ambient
@@ -25,4 +28,4 @@ metadata:
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: legacy
+  name: unlabeled-app

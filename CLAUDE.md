@@ -129,24 +129,15 @@ istio-ambient-preflight/
 
 ## Build Order (Suggested)
 
-**Current status (2026-04-26):** steps 1–5 are complete. The scaffold,
-`Invoke-Kubectl` wrapper, `Get-ClusterInventory`, `Format-Finding`,
-`New-AmbientMigrationReport`, and the `Invoke-AmbientPreflight`
-orchestrator are all in place and covered by Pester unit tests. Six
-checks are implemented against that pattern: **N-01** (Warning — namespace
-missing `istio.io/dataplane-mode` label), **N-02** (Blocker — conflicting
-`istio-injection=enabled` + `istio.io/dataplane-mode=ambient` labels),
-**P-01** (Info — pod with `istio.io/dataplane-mode=none` in an ambient
-namespace), **P-02** (Info — pod in an ambient namespace still carrying
-sidecar-injection configuration), **C-01** (Blocker — CiliumNetworkPolicy
-in an ambient namespace using pod-selector `fromEndpoints` ingress that
-does not account for the waypoint pod's identity), and **C-02** (Blocker
-— CiliumNetworkPolicy in an ambient namespace that does not allow
-TCP/15008 for ztunnel HBONE traffic). The v0.1 "≥ 6 distinct checks"
-target in the Definition of Done is met. Remaining v0.1 work: the G-
-checks in step 6, a proper kind-based integration harness (step 7 —
-fixture YAML is staged under `tests/Integration/fixtures/` but not yet
-wired into CI), README polish (step 8), and the v0.1.0 release (step 9).
+**Current status (2026-04-27):** v0.1.0 has been cut. All six v0.1
+checks are shipped (N-01, N-02, P-01, P-02, C-01, C-02), the kind
+fixture set with idempotent setup/teardown scripts exercises every
+check end-to-end, `examples/sample-report.md` captures a real run,
+unit tests run on both Ubuntu and Windows in CI, and `build/Publish-Module.ps1`
++ `RELEASING.md` document the manual publish flow. Carried forward to
+v0.2: the demo GIF (placeholder + recording recipe in place at
+`docs/demo.gif` and `docs/demo-script.md`), wiring the integration
+fixtures into a CI job, and the **G-01** / **G-02** ingress checks.
 
 1. Repo scaffold: license, readme skeleton, module manifest, directory structure, .gitignore, GitHub Actions stub
 2. `Invoke-Kubectl` wrapper + `Get-ClusterInventory` — foundation

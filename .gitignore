@@ -4,6 +4,7 @@ bin/
 obj/
 publish/
 Output/
+.stage/
 
 # Pester / test output
 TestResults.xml

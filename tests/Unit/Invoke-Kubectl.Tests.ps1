@@ -2,13 +2,20 @@
 #Requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.0.0' }
 
 # These tests execute the real Invoke-Kubectl code path by planting a stub
-# 'kubectl' on PATH. The stub is a POSIX shell script, so the suite runs on
-# Linux and macOS (including the Ubuntu CI runner). Windows is skipped; a
-# .cmd-based stub can be added when a Windows CI leg is introduced.
+# 'kubectl' on PATH. The stub binaries live under tests/Unit/Helpers/ and
+# come in two flavors: a POSIX shell script for Linux/macOS, and a
+# .cmd + .ps1 pair for Windows. Both share the same env-var contract:
+#   IAP_STUB_ARGS_FILE  - if set, the args vector is appended (one line
+#                         per invocation) so tests can assert on it.
+#   IAP_STUB_STDOUT     - written verbatim to stdout.
+#   IAP_STUB_STDERR     - written verbatim to stderr.
+#   IAP_STUB_EXIT       - exit code (default 0).
 
 BeforeAll {
     $privateRoot = Resolve-Path "$PSScriptRoot/../../src/IstioAmbientPreflight/Private"
     . (Join-Path $privateRoot 'Invoke-Kubectl.ps1')
+
+    $helpersRoot = Resolve-Path "$PSScriptRoot/Helpers"
 
     $script:origPath = $env:PATH
     $script:stubRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("iap-kubectl-stub-" + [guid]::NewGuid())
@@ -16,25 +23,23 @@ BeforeAll {
 
     $script:argsFile = Join-Path $script:stubRoot 'invocations.log'
 
-    $stubPath = Join-Path $script:stubRoot 'kubectl'
-    $stubBody = @'
-#!/usr/bin/env bash
-if [ -n "$IAP_STUB_ARGS_FILE" ]; then
-  printf '%s\n' "$*" >> "$IAP_STUB_ARGS_FILE"
-fi
-if [ -n "$IAP_STUB_STDERR" ]; then
-  printf '%s' "$IAP_STUB_STDERR" >&2
-fi
-if [ -n "$IAP_STUB_STDOUT" ]; then
-  printf '%s' "$IAP_STUB_STDOUT"
-fi
-exit "${IAP_STUB_EXIT:-0}"
-'@
-    # Write with LF endings regardless of host to keep the shebang valid.
-    [System.IO.File]::WriteAllText($stubPath, $stubBody.Replace("`r`n", "`n"))
-    & /bin/chmod '+x' $stubPath
+    if ($IsWindows) {
+        # The .cmd shim invokes pwsh against the sibling .ps1, so both
+        # files must live next to each other in the stub directory.
+        Copy-Item -LiteralPath (Join-Path $helpersRoot 'kubectl-stub.cmd') `
+                  -Destination (Join-Path $script:stubRoot 'kubectl.cmd')
+        Copy-Item -LiteralPath (Join-Path $helpersRoot 'kubectl-stub.ps1') `
+                  -Destination (Join-Path $script:stubRoot 'kubectl-stub.ps1')
+    } else {
+        $stubDest = Join-Path $script:stubRoot 'kubectl'
+        # Write through .NET to guarantee LF line endings; a CRLF shebang
+        # would silently fail with /usr/bin/env: 'bash\r'.
+        $stubBody = Get-Content -LiteralPath (Join-Path $helpersRoot 'kubectl-stub.sh') -Raw
+        [System.IO.File]::WriteAllText($stubDest, $stubBody.Replace("`r`n", "`n"))
+        & /bin/chmod '+x' $stubDest
+    }
 
-    $env:PATH            = $script:stubRoot + [System.IO.Path]::PathSeparator + $script:origPath
+    $env:PATH               = $script:stubRoot + [System.IO.Path]::PathSeparator + $script:origPath
     $env:IAP_STUB_ARGS_FILE = $script:argsFile
 }
 
@@ -49,7 +54,7 @@ AfterAll {
     }
 }
 
-Describe 'Invoke-Kubectl' -Skip:($IsWindows) {
+Describe 'Invoke-Kubectl' {
 
     BeforeEach {
         if (Test-Path -LiteralPath $script:argsFile) {

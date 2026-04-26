@@ -20,6 +20,8 @@ Three categories of problem bite almost every team attempting the migration:
 
 This tool reads your cluster and tells you, in plain English, where each of these problems lives — *before* you flip the switch.
 
+![demo screencast](./docs/demo.gif)
+
 ## What It Does
 
 - Scans a live Kubernetes cluster (read-only, via your existing kubeconfig)
@@ -72,35 +74,38 @@ Prerequisites:
 
 ## Example Output
 
-See [`examples/demo-cluster/sample-report.md`](./examples/demo-cluster/sample-report.md) for a full example. A snippet:
+See [`examples/sample-report.md`](./examples/sample-report.md) for the full
+report from a real run against the kind fixture cluster (six findings
+exercising every check). A snippet from the same run:
 
 ```markdown
 # Istio Ambient Preflight Report
 
-**Generated:** 2026-04-22T14:10:03Z
-**Context:** demo-prod
 **Verdict:** Blocked
 
 ## Summary
 
 | Severity | Count |
 |---|---|
-| 🔴 Blocker | 2 |
-| 🟡 Warning | 3 |
-| 🔵 Info | 0 |
+| 🔴 Blocker | 3 |
+| 🟡 Warning | 1 |
+| 🔵 Info | 2 |
 
 ## 🔴 Blockers
 
-### C-02 · Network · CiliumNetworkPolicy/allow-frontend in namespace payments
+### C-01 · Network · CiliumNetworkPolicy/pod-only-no-15008 in namespace payments
 
-CiliumNetworkPolicy 'allow-frontend' in ambient namespace 'payments' declares
-ingress rules but does not allow TCP port 15008. In ambient mode, mesh traffic
-arrives on the destination node via ztunnel using HBONE on TCP/15008; this
-policy will silently drop mesh traffic after migration. Add an ingress rule
-that permits TCP/15008 from the ztunnel DaemonSet, or migrate the L7 controls
-to an Istio AuthorizationPolicy.
+CiliumNetworkPolicy 'pod-only-no-15008' in ambient namespace 'payments'
+restricts ingress by pod-selector matchLabels (for example, allowing only
+sources like 'app=frontend'). In ambient mode with a waypoint proxy, mesh
+traffic arrives at the destination from the waypoint pod's identity rather
+than the original client; the original pod labels are no longer present on
+the connection, so this policy will silently drop waypoint-routed traffic
+after migration. Either add a fromEndpoints rule that admits the waypoint
+via its 'istio.io/gateway-name' label, or migrate L7 source-identity
+controls to an Istio AuthorizationPolicy.
 
-**Reference:** https://istio.io/latest/docs/ambient/architecture/traffic-redirection/
+**Reference:** https://istio.io/latest/docs/ambient/usage/waypoint/
 ```
 
 ## What It Checks

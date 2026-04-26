@@ -1,76 +1,72 @@
 # Integration fixtures
 
-YAML for standing up a local [kind](https://kind.sigs.k8s.io/) cluster
-that reliably triggers every check implemented in this repo today:
+YAML and helper scripts for standing up a local cluster that exercises
+every check the tool implements today. The goal is "stand it up,
+copy/paste, see findings" -- both for local development and as the
+reference recipe for the future CI integration job.
 
-| Fixture | Triggers |
-|---|---|
-| `namespaces.yaml` — `legacy` (no dataplane-mode label) | **N-01** (Warning) |
-| `namespaces.yaml` — `half-migrated` (both `istio-injection=enabled` and `istio.io/dataplane-mode=ambient`) | **N-02** (Blocker) |
-| `ciliumnetworkpolicy-missing-15008.yaml` in ambient-labeled `demo-app` | **C-02** (Blocker) |
+## What each fixture demonstrates
 
-These are **not** applied automatically by CI yet — running them requires
-a kind cluster with Cilium installed for the CRDs, which is a larger
-piece of setup. The goal here is just to make the "stand it up locally
-and see the tool fire" path a single copy-paste.
+| Fixture | Resource | Triggers |
+|---|---|---|
+| `namespaces.yaml` -> `unlabeled-app` (no `dataplane-mode` label) | Namespace | **N-01** (Warning) |
+| `namespaces.yaml` -> `legacy-injection` (both `istio-injection=enabled` and `istio.io/dataplane-mode=ambient`) | Namespace | **N-02** (Blocker) |
+| `pods.yaml` -> `payments/opt-out-pod` (`istio.io/dataplane-mode=none` in ambient namespace) | Pod | **P-01** (Info) |
+| `pods.yaml` -> `legacy-injection/legacy-pod` (carries `sidecar.istio.io/inject=true` annotation) | Pod | **P-02** (Info) |
+| `ciliumnetworkpolicy-missing-15008.yaml` -> `payments/pod-only-no-15008` | CiliumNetworkPolicy | **C-01** (Blocker) and **C-02** (Blocker) |
+| `ciliumnetworkpolicy-waypoint-allowed.yaml` -> `payments/waypoint-allowed` (negative control) | CiliumNetworkPolicy | (nothing -- proves the checks don't false-positive) |
 
 ## Prerequisites
 
-- `kind` on PATH
-- `kubectl` on PATH
-- `helm` on PATH (to install Cilium)
-- Docker or another kind-compatible container runtime
+- `kubectl` on PATH, pointed at any cluster you have write access to
+- For the kind path specifically: `kind` and a Docker-compatible runtime
+- Internet access (to fetch the pinned Cilium CRD)
 
-## Stand up the fixture cluster
+You do **not** need a full Cilium installation -- the setup script only
+installs the CiliumNetworkPolicy CRD so kubectl will accept the resource
+shape. There is no Cilium agent, no CNI override, nothing else.
 
-From the repository root:
+## Stand it up
 
 ```bash
-# 1. Create the kind cluster (CNI disabled so Cilium can own it).
+# Optional: spin up a fresh kind cluster.
 kind create cluster --config tests/Integration/fixtures/kind-cluster.yaml
 
-# 2. Install Cilium (pins a recent stable release; bump as needed).
-helm repo add cilium https://helm.cilium.io/
-helm repo update
-helm install cilium cilium/cilium \
-  --version 1.15.6 \
-  --namespace kube-system \
-  --set kubeProxyReplacement=false \
-  --set operator.replicas=1
-
-# 3. Wait for Cilium to become ready.
-kubectl -n kube-system rollout status daemonset/cilium --timeout=300s
-
-# 4. Apply the fixture namespaces and policy.
-kubectl apply -f tests/Integration/fixtures/namespaces.yaml
-kubectl apply -f tests/Integration/fixtures/ciliumnetworkpolicy-missing-15008.yaml
+# Apply the fixture set (idempotent).
+./tests/Integration/fixtures/setup-fixtures.sh
 ```
 
-## Run the preflight against it
+Then run the preflight:
 
 ```powershell
 Import-Module ./src/IstioAmbientPreflight/IstioAmbientPreflight.psd1 -Force
 Invoke-AmbientPreflight `
-  -Context (kubectl config current-context) `
   -ExcludeNamespace local-path-storage `
-  -OutputPath ./ambient-preflight-report.md
+  -OutputPath ./examples/sample-report.md
 ```
 
-Expected: at least two Blocker findings (one N-02 on `half-migrated`,
-one C-02 on the `allow-frontend` policy in `demo-app`) and one Warning
-finding (N-01 on `legacy`). The exact count depends on which other
-namespaces kind and Cilium install create on your cluster.
+Expected: at least three Blockers (N-02 on `legacy-injection`, C-01 +
+C-02 on `payments/pod-only-no-15008`), one Warning (N-01 on
+`unlabeled-app`), and two Info findings (P-01 + P-02). Exact totals
+vary depending on what other namespaces your cluster carries (kind
+also creates `local-path-storage`, etc.).
 
 ## Tear it down
 
 ```bash
+# Default: remove just the fixture namespaces (cascades pods + CNPs).
+./tests/Integration/fixtures/teardown-fixtures.sh
+
+# --full: also remove the Cilium CNP CRD.
+./tests/Integration/fixtures/teardown-fixtures.sh --full
+
+# Or delete the kind cluster entirely.
 kind delete cluster --name ambient-preflight-fixture
 ```
 
 ## Why these fixtures live here
 
-When the integration harness is wired into CI (see ROADMAP.md, v0.1
-Quality section), it will consume these same files. Keeping them in
-version control now gives local users — and the future CI job — a single
-source of truth for what "a cluster that exercises every check" looks
-like.
+When the integration harness is wired into CI (see ROADMAP.md), it will
+consume these same files. Keeping them in version control now gives
+local users -- and the future CI job -- a single source of truth for
+what "a cluster that exercises every check" looks like.

@@ -7,87 +7,117 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+## [0.1.0] - 2026-04-27
 
-- Initial module scaffold: manifest, root module, Public/Private layout.
-- `Invoke-Kubectl` private helper: context-aware kubectl wrapper with JSON parsing.
-- `Format-Finding` private helper: canonical finding object factory.
-- `Get-ClusterInventory` private helper: single-pass cluster inventory across
+First public release. A read-only PowerShell module that scans a
+Kubernetes cluster and produces a markdown readiness report for an
+Istio sidecar-to-ambient migration.
+
+### Added — module foundation
+
+- Module scaffold: manifest, root module, Public/Private layout, MIT
+  license. `Install-Module IstioAmbientPreflight` lands a working module.
+- `Invoke-Kubectl` private helper: context-aware kubectl wrapper with
+  separate stdout/stderr capture and JSON parsing. Single seam between
+  the module and the CLI binary.
+- `Get-ClusterInventory` private helper: single-pass inventory across
   Namespaces, Pods, Istio Gateways / VirtualServices / DestinationRules,
-  Cilium NetworkPolicies, and Gateway API Gateways. Gracefully returns empty
-  arrays when optional CRDs (Istio, Cilium, Gateway API) are not installed.
-- `Test-NamespaceLabels` private helper — **first real check (N-01)**:
-  Warning for namespaces missing `istio.io/dataplane-mode=ambient` and not
-  explicitly opted out with `...=none`. System namespaces are skipped.
-- **Check N-02** (Blocker, Labels) in `Test-NamespaceLabels`: flags
-  namespaces that are labeled with BOTH `istio-injection=enabled` and
-  `istio.io/dataplane-mode=ambient`. Istio's documented practice is one
-  mode per namespace; the mixed state typically indicates an incomplete
-  migration and produces ambiguous behavior. `istio-injection=disabled`
-  paired with ambient is not flagged. N-02 preempts N-01 for the same
-  namespace. Honors `-ExcludeNamespace`.
-- `tests/Integration/fixtures/` — staged YAML for a local kind cluster
-  that reliably triggers N-01, N-02, and C-02 (ambient-labeled namespace,
-  namespace with conflicting labels, CiliumNetworkPolicy missing TCP/15008).
-  Not yet wired into CI — see the fixtures README for local setup.
-- `Test-CiliumPolicyCompatibility` private helper — **checks C-01 and
-  C-02**:
-  - **C-02** (Blocker, Network): flags any CiliumNetworkPolicy in an
-    ambient-enrolled namespace whose ingress rules do not admit ztunnel
-    HBONE traffic on TCP port 15008. Policies in non-ambient namespaces
-    and egress-only policies are ignored.
-  - **C-01** (Blocker, Network): flags policies in ambient namespaces
-    whose `fromEndpoints` rules restrict source by pod-selector
-    matchLabels (e.g. `app=frontend`) without referencing a waypoint
-    identity (`istio.io/gateway-name` or `istio.io/waypoint-for`). After
-    migration the original pod identity is replaced by the waypoint's,
-    so these policies silently drop waypoint-sourced traffic. The check
-    suppresses when the policy already has at least one
-    waypoint-aware fromEndpoints, signalling that the operator
-    considered ambient.
-  - Both checks fire independently on the same policy when both
-    conditions apply (verified in tests).
-  - The whole helper no-ops silently when the Cilium CRD is not
-    installed.
-- `Test-PodLabels` private helper — **checks P-01 and P-02**:
-  - **P-01** (Info, Pods): flags pods labeled
-    `istio.io/dataplane-mode=none` inside an ambient-enrolled namespace.
-    These pods will bypass the mesh; the finding makes the exclusion
-    visible in migration planning so it stays an intentional choice.
-  - **P-02** (Info, Pods): flags pods in ambient namespaces that still
-    carry sidecar-injection configuration — either the
-    `sidecar.istio.io/inject=true` annotation on the pod, or an
-    `istio-injection=enabled` label on the namespace. Both reasons are
-    rolled into a single per-pod finding when both apply. P-02
-    deliberately overlaps with N-02 at the namespace level: N-02
-    addresses the platform team, P-02 the workload owner.
-- `Invoke-AmbientPreflight` now also runs `Test-PodLabels` as part of
-  the compatibility-check phase.
-- Session conventions documented in CLAUDE.md: end every session with a
-  commit, keep README/ROADMAP/CHANGELOG in sync as code changes (no
-  trailing "docs sync" sessions), and start fresh sessions by re-reading
-  the four context docs.
-- `-ExcludeNamespace` parameter on `Invoke-AmbientPreflight` and
-  `Test-NamespaceLabels`: appends user-supplied names to the built-in
-  system-namespace skip list (kube-system, kube-public, kube-node-lease,
-  istio-system, cilium). Lets kind/AKS/EKS/GKE users suppress expected
-  N-01 noise from infrastructure namespaces.
-- `New-AmbientMigrationReport` public cmdlet: renders findings to a markdown
-  report with a readiness verdict (Ready / Ready with Warnings / Blocked),
-  a severity-count summary table, and three always-emitted sections
-  (Blockers / Warnings / Info).
+  Cilium NetworkPolicies, and Gateway API Gateways. Gracefully returns
+  empty arrays when optional CRDs (Istio, Cilium, Gateway API) are not
+  installed.
+- `Format-Finding` private helper: canonical finding object factory
+  emitting `IstioAmbientPreflight.Finding` PSCustomObjects with
+  Severity / Category / CheckId / Resource / Message / DocLink.
+- `New-AmbientMigrationReport` public cmdlet: renders findings to a
+  markdown report with a readiness verdict (Ready / Ready with Warnings
+  / Blocked), a severity-count summary table, and three always-emitted
+  sections (Blockers / Warnings / Info).
 - `Invoke-AmbientPreflight` public cmdlet: top-level orchestrator.
-  Parameters `-Context`, `-OutputPath`, `-Namespace`. Returns a result
-  object containing the report path and severity counts.
-- Module manifest now declares `FunctionsToExport` explicitly for
+  Parameters `-Context`, `-OutputPath`, `-Namespace`,
+  `-ExcludeNamespace`. Returns a result object with the report path
+  and per-severity finding counts.
+- Module manifest declares `FunctionsToExport` explicitly for
   `Invoke-AmbientPreflight` and `New-AmbientMigrationReport`.
-- Pester 5 unit test harness with mocked kubectl (Format-Finding,
+
+### Added — checks
+
+- **N-01** (Warning, Labels) in `Test-NamespaceLabels`: flags namespaces
+  missing `istio.io/dataplane-mode=ambient` and not explicitly opted out
+  with `=none`. System namespaces are skipped.
+- **N-02** (Blocker, Labels) in `Test-NamespaceLabels`: flags
+  namespaces labeled with BOTH `istio-injection=enabled` and
+  `istio.io/dataplane-mode=ambient`. Honors `-ExcludeNamespace` and
+  preempts N-01 for the same namespace.
+- **P-01** (Info, Pods) in `Test-PodLabels`: flags pods labeled
+  `istio.io/dataplane-mode=none` inside an ambient-enrolled namespace.
+  Surfaces explicit opt-outs so they stay intentional.
+- **P-02** (Info, Pods) in `Test-PodLabels`: flags pods in ambient
+  namespaces that still carry sidecar-injection configuration
+  (`sidecar.istio.io/inject=true` annotation on the pod, or
+  `istio-injection=enabled` label on the namespace). Both reasons are
+  rolled into a single per-pod finding when both apply.
+- **C-01** (Blocker, Network) in `Test-CiliumPolicyCompatibility`:
+  flags policies in ambient namespaces whose `fromEndpoints` rules
+  restrict source by pod-selector matchLabels (e.g. `app=frontend`)
+  without referencing a waypoint identity
+  (`istio.io/gateway-name` or `istio.io/waypoint-for`). Suppresses when
+  the policy already includes at least one waypoint-aware
+  `fromEndpoints`, signalling the operator considered ambient.
+- **C-02** (Blocker, Network) in `Test-CiliumPolicyCompatibility`:
+  flags any CiliumNetworkPolicy in an ambient-enrolled namespace whose
+  ingress rules do not admit ztunnel HBONE traffic on TCP port 15008.
+  Policies in non-ambient namespaces and egress-only policies are
+  ignored.
+- C-01 and C-02 both fire on the same policy when both conditions
+  apply (no mutual suppression).
+- `Test-CiliumPolicyCompatibility` and `Test-PodLabels` no-op silently
+  when their underlying CRDs / resource lists are empty.
+
+### Added — testing and CI
+
+- Pester 5 unit test harness: 78 tests covering Format-Finding,
   Invoke-Kubectl, Get-ClusterInventory, Test-NamespaceLabels,
   Test-CiliumPolicyCompatibility, Test-PodLabels,
-  New-AmbientMigrationReport, Invoke-AmbientPreflight).
+  New-AmbientMigrationReport, and Invoke-AmbientPreflight.
+- `tests/Unit/Helpers/` — checked-in kubectl stubs:
+  `kubectl-stub.sh` for Linux/macOS plus a `kubectl-stub.cmd` +
+  `kubectl-stub.ps1` pair for Windows. Both follow the same env-var
+  contract (`IAP_STUB_STDOUT`, `IAP_STUB_STDERR`, `IAP_STUB_EXIT`,
+  `IAP_STUB_ARGS_FILE`), so the Invoke-Kubectl test suite runs
+  identically on every supported platform.
 - Integration smoke test under `tests/Integration/` that runs
   `Invoke-AmbientPreflight` against the current kubectl context.
   Runtime-skipped when kubectl or a live cluster is unavailable.
-- GitHub Actions CI workflow: PSScriptAnalyzer lint + Pester unit tests on Ubuntu / PowerShell 7.
+- `tests/Integration/fixtures/` — kind-cluster recipe plus YAML for
+  three namespaces (`payments`, `legacy-injection`, `unlabeled-app`),
+  two pods (`opt-out-pod`, `legacy-pod`), and two
+  CiliumNetworkPolicies (a triggering one and a clean negative
+  control). Together they exercise N-01, N-02, P-01, P-02, C-01, and
+  C-02 in a single run.
+- `tests/Integration/fixtures/setup-fixtures.sh` and
+  `teardown-fixtures.sh` — idempotent scripts that install the
+  pinned Cilium CNP CRD and apply / remove the fixtures.
+- GitHub Actions CI workflow: PSScriptAnalyzer lint + Pester unit
+  tests on a matrix of `ubuntu-latest` and `windows-latest`.
 
-[Unreleased]: https://github.com/ppatel1604/istio-ambient-preflight/commits/main
+### Added — release tooling and docs
+
+- `build/Publish-Module.ps1` — pre-publish dry-run that validates the
+  manifest, runs PSScriptAnalyzer, runs the Pester unit suite, and
+  stages a publish-ready copy of the module under `.stage/`. Does
+  not actually upload.
+- `RELEASING.md` — end-to-end release runbook (version bump,
+  changelog cut, dry run, manual `Publish-Module`, tag, GitHub
+  release, post-publish smoke test).
+- `docs/demo-script.md` — repeatable recipe for re-recording the
+  README's screencast.
+- `docs/demo.gif` — placeholder graphic; replaced when the real
+  screencast is recorded.
+- `examples/sample-report.md` — real preflight output captured from
+  the kind fixture cluster, exercising every check.
+- Session conventions documented in CLAUDE.md: end every session
+  with a commit, keep docs in sync as code changes, re-read the
+  four context docs at the start of every fresh session.
+
+[Unreleased]: https://github.com/ppatel1604/istio-ambient-preflight/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/ppatel1604/istio-ambient-preflight/releases/tag/v0.1.0

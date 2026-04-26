@@ -1,0 +1,43 @@
+# Fixture pods that exercise the pod-level checks (P-01, P-02).
+#
+# payments/opt-out-pod        : carries 'istio.io/dataplane-mode=none' in
+#                               an ambient namespace, so it explicitly
+#                               opts out of the mesh. Fires P-01 (Info).
+# legacy-injection/legacy-pod : carries the
+#                               'sidecar.istio.io/inject=true' annotation
+#                               in a namespace that is itself in the
+#                               legacy/ambient overlap state. Fires P-02
+#                               (Info). The pod also fires P-02 from the
+#                               namespace-side trigger (istio-injection
+#                               label on legacy-injection), but the check
+#                               coalesces both into one finding per pod.
+#
+# Both pods use the upstream pause image so the kubelet brings them up
+# instantly with negligible CPU/memory overhead. They do nothing.
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: opt-out-pod
+  namespace: payments
+  labels:
+    app: legacy-tls
+    istio.io/dataplane-mode: none
+spec:
+  containers:
+    - name: pause
+      image: registry.k8s.io/pause:3.9
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: legacy-pod
+  namespace: legacy-injection
+  annotations:
+    sidecar.istio.io/inject: "true"
+  labels:
+    app: legacy
+spec:
+  containers:
+    - name: pause
+      image: registry.k8s.io/pause:3.9

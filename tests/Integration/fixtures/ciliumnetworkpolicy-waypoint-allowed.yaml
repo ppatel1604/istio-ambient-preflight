@@ -1,0 +1,27 @@
+# Negative control: a CiliumNetworkPolicy that does NOT fire any check.
+# Its job is to prove that the analyzer doesn't false-positive on a
+# correctly authored ambient-aware policy.
+#
+#   * 'fromEndpoints' selects pods carrying 'istio.io/gateway-name', the
+#     canonical waypoint identity label. C-01 suppresses.
+#   * 'toPorts' admits TCP/15008 alongside the workload port. C-02
+#     suppresses.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: waypoint-allowed
+  namespace: payments
+spec:
+  endpointSelector:
+    matchLabels:
+      app: api
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            istio.io/gateway-name: payments-waypoint
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: TCP
+            - port: "15008"
+              protocol: TCP

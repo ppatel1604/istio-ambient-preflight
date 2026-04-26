@@ -1,24 +1,29 @@
-# A CiliumNetworkPolicy that is "correct" for a sidecar-mode world but
-# will silently drop mesh traffic once the namespace is ambient-enrolled:
-# it declares an ingress rule restricted to TCP/8080 and omits the
-# ztunnel HBONE path on TCP/15008. C-02 should flag this policy.
+# Single CiliumNetworkPolicy that fires BOTH C-01 and C-02 in the
+# ambient-labeled 'payments' namespace:
 #
-# Requires the Cilium CRDs to be installed in the cluster. On a bare kind
-# cluster without Cilium, applying this file will fail with
-# "no matches for kind" — install Cilium first (see README in this dir).
+#   * C-02: ingress allows only TCP/8080, omitting the ztunnel HBONE
+#           path on TCP/15008. Mesh traffic to the destination pod will
+#           silently be dropped after migration.
+#   * C-01: 'fromEndpoints' restricts source by 'app=frontend', a
+#           pre-ambient pod selector. After migration the source on the
+#           connection is the waypoint pod's identity, not the original
+#           client, so this rule no longer matches mesh traffic.
+#
+# Requires the Cilium CNP CRD to be installed in the cluster -- see
+# setup-fixtures.sh in this directory.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
-  name: allow-frontend
-  namespace: demo-app
+  name: pod-only-no-15008
+  namespace: payments
 spec:
   endpointSelector:
     matchLabels:
-      app: frontend
+      app: backend
   ingress:
     - fromEndpoints:
         - matchLabels:
-            app: backend
+            app: frontend
       toPorts:
         - ports:
             - port: "8080"

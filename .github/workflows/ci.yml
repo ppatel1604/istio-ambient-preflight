@@ -10,9 +10,13 @@ permissions:
   contents: read
 
 jobs:
-  lint-and-test:
-    name: Lint + Unit Tests (Ubuntu / PowerShell 7)
-    runs-on: ubuntu-latest
+  unit:
+    name: Unit (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
 
     steps:
       - name: Checkout
@@ -51,6 +55,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: pester-unit-results
+          name: pester-unit-results-${{ matrix.os }}
           path: ./TestResults.xml
           if-no-files-found: ignore
