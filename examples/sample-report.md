@@ -1,6 +1,6 @@
 # Istio Ambient Preflight Report
 
-**Generated:** 2026-04-26T00:50:27Z  
+**Generated:** 2026-11-21T21:21:54Z  
 **Context:** (current kubeconfig context)  
 **Verdict:** Blocked
 
@@ -8,8 +8,8 @@
 
 | Severity | Count |
 |---|---|
-| 🔴 Blocker | 3 |
-| 🟡 Warning | 1 |
+| 🔴 Blocker | 4 |
+| 🟡 Warning | 2 |
 | 🔵 Info | 2 |
 
 ## 🔴 Blockers
@@ -32,6 +32,12 @@ CiliumNetworkPolicy 'pod-only-no-15008' in ambient namespace 'payments' restrict
 
 **Reference:** https://istio.io/latest/docs/ambient/usage/waypoint/
 
+### G-01 · Ingress · Gateway/shop-legacy in namespace payments (Istio) + Gateway/shop-gw in namespace payments (Gateway API)
+
+Istio Gateway 'payments/shop-legacy' and Gateway API Gateway 'payments/shop-gw' both claim overlapping hostnames: 'shop.example.com'. The two APIs are served by separate gateway deployments, so these hosts have two independent entry points and which one receives traffic depends on DNS and load-balancer wiring outside the mesh. Routes and policies attached to one gateway do not apply to the other. Move each hostname to a single API (Istio recommends the Gateway API for ambient) and remove it from the other gateway before migrating.
+
+**Reference:** https://istio.io/latest/docs/tasks/traffic-management/ingress/gateway-api/
+
 ## 🟡 Warnings
 
 ### N-01 · Labels · Namespace/unlabeled-app
@@ -39,6 +45,12 @@ CiliumNetworkPolicy 'pod-only-no-15008' in ambient namespace 'payments' restrict
 Namespace 'unlabeled-app' has no 'istio.io/dataplane-mode' label. Workloads here will not be enrolled in the ambient mesh after migration. Apply 'kubectl label namespace unlabeled-app istio.io/dataplane-mode=ambient' to enroll, or 'kubectl label namespace unlabeled-app istio.io/dataplane-mode=none' to explicitly opt out.
 
 **Reference:** https://istio.io/latest/docs/ambient/usage/add-workloads/
+
+### G-02 · Ingress · VirtualService/shop-routes in namespace payments
+
+VirtualService 'shop-routes' in namespace 'payments' references gateway 'retired-gateway', which resolves to 'payments/retired-gateway' but no Istio Gateway with that name exists. Routes bound to that gateway are not programmed anywhere, so traffic you expect this VirtualService to handle at ingress is not reaching it today and will not after migration either. Either create the Gateway, correct the reference, or remove the stale binding.
+
+**Reference:** https://istio.io/latest/docs/reference/config/networking/virtual-service/#VirtualService
 
 ## 🔵 Info
 

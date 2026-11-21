@@ -37,7 +37,7 @@ Describe 'Get-ClusterInventory' {
             Mock Invoke-Kubectl -ParameterFilter { $Arguments -contains 'pods' } -MockWith {
                 New-KubeList -Kind 'Pod' -Items @([pscustomobject]@{ metadata = [pscustomobject]@{ name = 'p1'; namespace = 'demo-app' } })
             }
-            Mock Invoke-Kubectl -ParameterFilter { $Arguments -contains 'gateways.gateway.networking.istio.io' } -MockWith {
+            Mock Invoke-Kubectl -ParameterFilter { $Arguments -contains 'gateways.networking.istio.io' } -MockWith {
                 New-KubeList -Kind 'Gateway' -Items @([pscustomobject]@{ metadata = [pscustomobject]@{ name = 'istio-gw'; namespace = 'istio-system' } })
             }
             Mock Invoke-Kubectl -ParameterFilter { $Arguments -contains 'virtualservices.networking.istio.io' } -MockWith {

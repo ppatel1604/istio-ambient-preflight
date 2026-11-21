@@ -15,16 +15,22 @@ reference recipe for the future CI integration job.
 | `pods.yaml` -> `legacy-injection/legacy-pod` (carries `sidecar.istio.io/inject=true` annotation) | Pod | **P-02** (Info) |
 | `ciliumnetworkpolicy-missing-15008.yaml` -> `payments/pod-only-no-15008` | CiliumNetworkPolicy | **C-01** (Blocker) and **C-02** (Blocker) |
 | `ciliumnetworkpolicy-waypoint-allowed.yaml` -> `payments/waypoint-allowed` (negative control) | CiliumNetworkPolicy | (nothing -- proves the checks don't false-positive) |
+| `gateways.yaml` -> `payments/shop-legacy` (Istio) + `payments/shop-gw` (Gateway API), both claiming `shop.example.com` | Gateway | **G-01** (Blocker) |
+| `gateways.yaml` -> `payments/shop-routes` (binds to missing `retired-gateway`) | VirtualService | **G-02** (Warning) |
+| `gateways.yaml` -> `payments/internal-routes` (binds only to `mesh`; negative control) | VirtualService | (nothing) |
 
 ## Prerequisites
 
 - `kubectl` on PATH, pointed at any cluster you have write access to
 - For the kind path specifically: `kind` and a Docker-compatible runtime
-- Internet access (to fetch the pinned Cilium CRD)
+- Internet access (to fetch the pinned Cilium, Istio and Gateway API CRDs)
 
-You do **not** need a full Cilium installation -- the setup script only
-installs the CiliumNetworkPolicy CRD so kubectl will accept the resource
-shape. There is no Cilium agent, no CNI override, nothing else.
+You do **not** need a full Cilium or Istio installation -- the setup
+script only installs the CRDs so kubectl will accept the resource
+shapes. There is no Cilium agent, no Istio control plane, no CNI
+override. The Istio and Gateway API CRDs are installed **only if they
+are missing**, so an existing Istio install's CRDs are never overwritten,
+and teardown never removes them.
 
 ## Stand it up
 
@@ -41,15 +47,18 @@ Then run the preflight:
 ```powershell
 Import-Module ./src/IstioAmbientPreflight/IstioAmbientPreflight.psd1 -Force
 Invoke-AmbientPreflight `
-  -ExcludeNamespace local-path-storage `
+  -ExcludeNamespace local-path-storage,default `
   -OutputPath ./examples/sample-report.md
 ```
 
-Expected: at least three Blockers (N-02 on `legacy-injection`, C-01 +
-C-02 on `payments/pod-only-no-15008`), one Warning (N-01 on
-`unlabeled-app`), and two Info findings (P-01 + P-02). Exact totals
-vary depending on what other namespaces your cluster carries (kind
-also creates `local-path-storage`, etc.).
+Expected: at least four Blockers (N-02 on `legacy-injection`, C-01 +
+C-02 on `payments/pod-only-no-15008`, G-01 on the `shop-legacy` /
+`shop-gw` pair), two Warnings (N-01 on `unlabeled-app`, G-02 on
+`payments/shop-routes`), and two Info findings (P-01 + P-02). Exact
+totals vary depending on what other namespaces your cluster carries
+(kind also creates `local-path-storage`, and leaves `default`
+unlabeled, so add `default` to `-ExcludeNamespace` to match
+`examples/sample-report.md`).
 
 ## Tear it down
 

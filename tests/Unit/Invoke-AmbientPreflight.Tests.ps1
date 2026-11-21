@@ -21,6 +21,7 @@ BeforeAll {
     function Test-NamespaceLabels             { param($Inventory, $Namespace, $ExcludeNamespace) }
     function Test-PodLabels                   { param($Inventory, $Namespace) }
     function Test-CiliumPolicyCompatibility   { param($Inventory) }
+    function Test-GatewayConflict             { param($Inventory, $Namespace) }
     function New-AmbientMigrationReport       { param($Findings, $OutputPath, $Context) }
 
     . (Join-Path $publicRoot 'Invoke-AmbientPreflight.ps1')
@@ -72,6 +73,9 @@ Describe 'Invoke-AmbientPreflight' {
         Mock Test-CiliumPolicyCompatibility {
             New-Finding -Severity 'Blocker' -CheckId 'C-02' -Resource 'CiliumNetworkPolicy/np in namespace payments'
         }
+        Mock Test-GatewayConflict {
+            New-Finding -Severity 'Warning' -CheckId 'G-02' -Resource 'VirtualService/vs in namespace payments'
+        }
         Mock New-AmbientMigrationReport {
             param($Findings, $OutputPath, $Context)
             # Write a minimal file so callers that Test-Path on the result work.
@@ -93,19 +97,20 @@ Describe 'Invoke-AmbientPreflight' {
         Should -Invoke Test-NamespaceLabels           -Times 1 -Exactly
         Should -Invoke Test-PodLabels                 -Times 1 -Exactly
         Should -Invoke Test-CiliumPolicyCompatibility -Times 1 -Exactly
+        Should -Invoke Test-GatewayConflict           -Times 1 -Exactly
         Should -Invoke New-AmbientMigrationReport     -Times 1 -Exactly
     }
 
     It 'aggregates findings from every check into the result object' {
         $result = Invoke-AmbientPreflight -OutputPath $script:reportPath
 
-        $result.FindingCount | Should -Be 3
+        $result.FindingCount | Should -Be 4
         $result.BlockerCount | Should -Be 1
-        $result.WarningCount | Should -Be 1
+        $result.WarningCount | Should -Be 2
         $result.InfoCount    | Should -Be 1
 
         $ids = $result.Findings | ForEach-Object CheckId | Sort-Object
-        $ids | Should -Be @('C-02', 'N-01', 'P-01')
+        $ids | Should -Be @('C-02', 'G-02', 'N-01', 'P-01')
     }
 
     It 'returns the absolute report path on the result' {
@@ -141,12 +146,16 @@ Describe 'Invoke-AmbientPreflight' {
         Should -Invoke Test-PodLabels -Times 1 -Exactly -ParameterFilter {
             $Namespace -eq 'payments'
         }
+        Should -Invoke Test-GatewayConflict -Times 1 -Exactly -ParameterFilter {
+            $Namespace -eq 'payments'
+        }
     }
 
     It 'returns a Ready summary (zero findings) when every check is silent' {
         Mock Test-NamespaceLabels             { }
         Mock Test-PodLabels                   { }
         Mock Test-CiliumPolicyCompatibility   { }
+        Mock Test-GatewayConflict             { }
 
         $result = Invoke-AmbientPreflight -OutputPath $script:reportPath
 

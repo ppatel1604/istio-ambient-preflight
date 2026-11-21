@@ -12,7 +12,7 @@ function Get-ClusterInventory {
         Resource types queried:
             Namespaces             - core/v1 (cluster-scoped)
             Pods                   - core/v1
-            IstioGateways          - gateway.networking.istio.io
+            IstioGateways          - networking.istio.io
             VirtualServices        - networking.istio.io
             DestinationRules       - networking.istio.io
             CiliumNetworkPolicies  - cilium.io
@@ -47,7 +47,7 @@ function Get-ClusterInventory {
     $resourceMap = [ordered]@{
         Namespaces            = @{ Resource = 'namespaces';                           ClusterScoped = $true  }
         Pods                  = @{ Resource = 'pods';                                 ClusterScoped = $false }
-        IstioGateways         = @{ Resource = 'gateways.gateway.networking.istio.io'; ClusterScoped = $false }
+        IstioGateways         = @{ Resource = 'gateways.networking.istio.io';         ClusterScoped = $false }
         VirtualServices       = @{ Resource = 'virtualservices.networking.istio.io';  ClusterScoped = $false }
         DestinationRules      = @{ Resource = 'destinationrules.networking.istio.io'; ClusterScoped = $false }
         CiliumNetworkPolicies = @{ Resource = 'ciliumnetworkpolicies.cilium.io';      ClusterScoped = $false }

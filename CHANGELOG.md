@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **G-01** (Blocker, Ingress) in new `Test-GatewayConflict`: flags each
+  pair of an Istio Gateway (`networking.istio.io`) and a Gateway API
+  Gateway (`gateway.networking.k8s.io`) that claim overlapping
+  hostnames. Handles the Istio `namespace/` host prefix, `*` and
+  `*.domain` wildcards, and Gateway API listeners without a hostname
+  (which match every host). Ignores waypoint and east-west Gateway API
+  Gateways (`istio-waypoint` / `istio-east-west` classes, `HBONE`
+  listeners), since those are mesh infrastructure rather than ingress.
+- **G-02** (Warning, Ingress) in `Test-GatewayConflict`: flags
+  VirtualServices whose `spec.gateways` or `spec.http[].match[].gateways`
+  name an Istio Gateway that does not exist. Resolves unqualified names
+  in the VirtualService's own namespace, plus `<ns>/<name>` and the
+  legacy `<name>.<ns>.svc.cluster.local` forms, and skips `mesh`. When the
+  name matches a Gateway API Gateway, the message explains that a
+  VirtualService cannot bind to it and suggests an HTTPRoute.
+- `Invoke-AmbientPreflight` runs `Test-GatewayConflict` and passes
+  `-Namespace` through to it.
+- Integration fixture `tests/Integration/fixtures/gateways.yaml`
+  exercising G-01, G-02 and a `mesh`-only negative control.
+  `setup-fixtures.sh` installs the Istio 1.24.2 and Gateway API v1.2.1
+  CRDs only when they are missing.
+- 24 new unit tests (102 total).
+
+### Fixed
+
+- `Get-ClusterInventory` queried the non-existent resource type
+  `gateways.gateway.networking.istio.io` instead of
+  `gateways.networking.istio.io`. The error was treated as "CRD not
+  installed", so the inventory always reported zero Istio Gateways.
+
+### Changed
+
+- `examples/sample-report.md` regenerated from the fixture cluster
+  (now 4 Blockers, 2 Warnings, 2 Info).
+
 ## [0.1.0] - 2026-04-27
 
 First public release. A read-only PowerShell module that scans a

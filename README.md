@@ -75,7 +75,7 @@ Prerequisites:
 ## Example Output
 
 See [`examples/sample-report.md`](./examples/sample-report.md) for the full
-report from a real run against the kind fixture cluster (six findings
+report from a real run against the kind fixture cluster (eight findings
 exercising every check). A snippet from the same run:
 
 ```markdown
@@ -87,8 +87,8 @@ exercising every check). A snippet from the same run:
 
 | Severity | Count |
 |---|---|
-| 🔴 Blocker | 3 |
-| 🟡 Warning | 1 |
+| 🔴 Blocker | 4 |
+| 🟡 Warning | 2 |
 | 🔵 Info | 2 |
 
 ## 🔴 Blockers
@@ -120,15 +120,11 @@ controls to an Istio AuthorizationPolicy.
 | P-02 | Pods in ambient namespaces still carrying sidecar-injection configuration (`sidecar.istio.io/inject=true` annotation, or namespace `istio-injection=enabled`) | Pods | Info |
 | C-01 | CiliumNetworkPolicies in ambient namespaces using pod-selector `fromEndpoints` ingress that won't match waypoint-sourced traffic | Network | Blocker |
 | C-02 | CiliumNetworkPolicies in ambient namespaces that do not allow TCP/15008 for ztunnel HBONE traffic | Network | Blocker |
+| G-01 | Istio Gateway and Gateway API Gateway claiming overlapping hostnames (waypoint / east-west gateways ignored) | Ingress | Blocker |
+| G-02 | VirtualServices bound to an Istio Gateway that doesn't exist | Ingress | Warning |
 
-### Planned for v0.1
-
-| ID | Check | Category | Severity |
-|---|---|---|---|
-| G-01 | Mixed Istio Gateway + Gateway API resources on overlapping hosts | Ingress | Blocker |
-| G-02 | VirtualServices referencing gateways that don't exist | Ingress | Warning |
-
-See [ROADMAP.md](./ROADMAP.md) for the full plan.
+G-01 and G-02 are on `main` and will ship in the next release. See
+[ROADMAP.md](./ROADMAP.md) for what's planned next.
 
 ## Who This Is For
 

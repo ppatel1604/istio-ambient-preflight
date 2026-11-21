@@ -2,7 +2,9 @@
 # Reverse setup-fixtures.sh.
 #
 # Default mode deletes the three fixture namespaces, which cascade-deletes
-# pods and CiliumNetworkPolicies in those namespaces. The Cilium CNP CRD
+# pods, CiliumNetworkPolicies, Gateways and VirtualServices in those
+# namespaces. Istio and Gateway API CRDs are never removed, even with
+# --full: they may belong to a real install on the cluster. The Cilium CNP CRD
 # itself is left installed because re-installing it on each iteration is
 # slow; pass --full to also remove the CRD.
 #
@@ -34,7 +36,7 @@ fi
 ctx=$(kubectl config current-context 2>/dev/null || echo '<none>')
 echo "==> Target context: ${ctx}"
 
-echo "==> Deleting fixture namespaces (cascades pods + CNPs)..."
+echo "==> Deleting fixture namespaces (cascades pods, CNPs, Gateways, VirtualServices)..."
 kubectl delete namespace payments legacy-injection unlabeled-app \
   --ignore-not-found=true --wait=false
 

@@ -92,7 +92,7 @@ istio-ambient-preflight/
 │       ├── IstioAmbientPreflight.psm1 # root module, dot-sources Public/Private
 │       ├── Public/
 │       │   ├── Invoke-AmbientPreflight.ps1
-│       │   ├── Get-AmbientReadiness.ps1
+│       │   ├── Get-AmbientReadiness.ps1   # planned, not yet implemented
 │       │   └── New-AmbientMigrationReport.ps1
 │       └── Private/
 │           ├── Invoke-Kubectl.ps1
@@ -114,7 +114,7 @@ istio-ambient-preflight/
 └── .github/
     └── workflows/
         ├── ci.yml                     # lint + unit tests on push
-        └── integration.yml            # kind integration tests on PR
+        └── integration.yml            # planned (v0.2): kind integration tests on PR
 ```
 
 ## Definition of Done for v0.1
@@ -138,6 +138,17 @@ unit tests run on both Ubuntu and Windows in CI, and `build/Publish-Module.ps1`
 v0.2: the demo GIF (placeholder + recording recipe in place at
 `docs/demo.gif` and `docs/demo-script.md`), wiring the integration
 fixtures into a CI job, and the **G-01** / **G-02** ingress checks.
+
+**Update (2026-11-22):** G-01 and G-02 are implemented on `main`
+(unreleased) in `Test-GatewayConflict`, with kind fixtures in
+`tests/Integration/fixtures/gateways.yaml`. The same change fixed the
+Istio Gateway CRD name in `Get-ClusterInventory`
+(`gateways.networking.istio.io`), which had made every cluster look
+like it had zero Istio Gateways. The fixture setup script installs
+Istio and Gateway API CRDs only when they are missing, and teardown
+never removes them, because they may belong to a real install.
+Remaining v0.2 items: demo GIF, CI integration job, JSON output, exit
+codes, `-GeneratePatches`.
 
 1. Repo scaffold: license, readme skeleton, module manifest, directory structure, .gitignore, GitHub Actions stub
 2. `Invoke-Kubectl` wrapper + `Get-ClusterInventory` — foundation

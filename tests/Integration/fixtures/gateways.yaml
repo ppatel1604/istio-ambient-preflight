@@ -1,0 +1,73 @@
+# Ingress fixtures for G-01 and G-02. Requires the Istio networking CRDs
+# and the Gateway API standard CRDs (setup-fixtures.sh installs them only
+# when they are missing). No Istio control plane or gateway pods are
+# needed: the preflight reads resource specs, not runtime status.
+#
+# shop-legacy  (Istio Gateway)       : claims shop.example.com
+# shop-gw      (Gateway API Gateway) : also claims shop.example.com
+#                                      -> G-01 (Blocker) for the pair
+# shop-routes  (VirtualService)      : binds to shop-legacy (exists) and
+#                                      retired-gateway (does not)
+#                                      -> G-02 (Warning) for retired-gateway
+# internal-routes (VirtualService)   : binds only to 'mesh'
+#                                      -> negative control, no finding
+---
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: shop-legacy
+  namespace: payments
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - shop.example.com
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: shop-gw
+  namespace: payments
+spec:
+  gatewayClassName: istio
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      hostname: shop.example.com
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: shop-routes
+  namespace: payments
+spec:
+  hosts:
+    - shop.example.com
+  gateways:
+    - shop-legacy
+    - retired-gateway
+  http:
+    - route:
+        - destination:
+            host: frontend
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: internal-routes
+  namespace: payments
+spec:
+  hosts:
+    - frontend
+  gateways:
+    - mesh
+  http:
+    - route:
+        - destination:
+            host: frontend

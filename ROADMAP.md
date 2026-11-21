@@ -45,10 +45,10 @@ library on the ingress side.
 
 ### Checks to implement
 
-- [ ] **G-01** Mixed Istio Gateway + Gateway API resources on overlapping
-      hosts (Blocker)
-- [ ] **G-02** VirtualServices referencing gateways that don't exist
-      (Warning)
+- [x] **G-01** Istio Gateway and Gateway API Gateway claiming overlapping
+      hostnames (Blocker) -- on `main`, unreleased
+- [x] **G-02** VirtualServices bound to an Istio Gateway that doesn't
+      exist (Warning) -- on `main`, unreleased
 - [ ] Expanded check library (target ~15 total)
 
 ### Features

@@ -12,6 +12,10 @@
 #   3. Creates 2 pods (opt-out-pod, legacy-pod) using pause:3.9.
 #   4. Creates 2 CiliumNetworkPolicies (a triggering one and a clean
 #      negative-control one).
+#   5. Installs the Istio networking CRDs and the Gateway API standard
+#      CRDs ONLY if they are not already present (so an existing Istio
+#      install is never overwritten), then creates an Istio Gateway, a
+#      Gateway API Gateway and two VirtualServices for G-01 / G-02.
 #
 # Idempotent: re-running is safe; kubectl apply does the right thing.
 #
@@ -20,12 +24,22 @@
 #     https://github.com/cilium/cilium/releases/tag/v1.16.5
 # The CRD itself is at:
 #   https://raw.githubusercontent.com/cilium/cilium/v1.16.5/pkg/k8s/apis/cilium.io/client/crds/v2/ciliumnetworkpolicies.yaml
-# Bump the version at the top of this script when refreshing.
+#
+# Istio and Gateway API CRDs (installed only when missing):
+#   pinned: istio 1.24.2
+#     https://raw.githubusercontent.com/istio/istio/1.24.2/manifests/charts/base/files/crd-all.gen.yaml
+#   pinned: gateway-api v1.2.1
+#     https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/standard-install.yaml
+# Bump the versions at the top of this script when refreshing.
 
 set -euo pipefail
 
 CILIUM_VERSION="v1.16.5"
 CILIUM_CNP_CRD_URL="https://raw.githubusercontent.com/cilium/cilium/${CILIUM_VERSION}/pkg/k8s/apis/cilium.io/client/crds/v2/ciliumnetworkpolicies.yaml"
+ISTIO_VERSION="1.24.2"
+ISTIO_CRDS_URL="https://raw.githubusercontent.com/istio/istio/${ISTIO_VERSION}/manifests/charts/base/files/crd-all.gen.yaml"
+GATEWAY_API_VERSION="v1.2.1"
+GATEWAY_API_CRDS_URL="https://github.com/kubernetes-sigs/gateway-api/releases/download/${GATEWAY_API_VERSION}/standard-install.yaml"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -53,6 +67,27 @@ echo "==> Applying CiliumNetworkPolicy fixtures..."
 kubectl apply -f "${SCRIPT_DIR}/ciliumnetworkpolicy-missing-15008.yaml"
 kubectl apply -f "${SCRIPT_DIR}/ciliumnetworkpolicy-waypoint-allowed.yaml"
 
+# Install a CRD bundle only when its marker CRD is absent. Never
+# re-applies over an existing install (which may be a different version
+# managed by istioctl, Helm or ArgoCD).
+ensure_crds() {
+  local marker="$1" url="$2" label="$3"
+  if kubectl get crd "${marker}" >/dev/null 2>&1; then
+    echo "==> ${label} CRDs already present (${marker}); leaving them untouched."
+  else
+    echo "==> Installing ${label} CRDs..."
+    kubectl apply -f "${url}"
+    kubectl wait --for=condition=Established "crd/${marker}" --timeout=60s
+  fi
+}
+
+ensure_crds gateways.networking.istio.io        "${ISTIO_CRDS_URL}"       "Istio ${ISTIO_VERSION}"
+ensure_crds virtualservices.networking.istio.io "${ISTIO_CRDS_URL}"       "Istio ${ISTIO_VERSION}"
+ensure_crds gateways.gateway.networking.k8s.io  "${GATEWAY_API_CRDS_URL}" "Gateway API ${GATEWAY_API_VERSION}"
+
+echo "==> Applying ingress (Gateway / VirtualService) fixtures..."
+kubectl apply -f "${SCRIPT_DIR}/gateways.yaml"
+
 cat <<'EOF'
 
 ==> Done.
@@ -61,7 +96,7 @@ Run the preflight to see findings:
 
   pwsh -NoProfile -Command "
     Import-Module ./src/IstioAmbientPreflight/IstioAmbientPreflight.psd1 -Force
-    Invoke-AmbientPreflight -ExcludeNamespace local-path-storage -OutputPath ./examples/sample-report.md
+    Invoke-AmbientPreflight -ExcludeNamespace local-path-storage,default -OutputPath ./examples/sample-report.md
   "
 
 Tear down with: ./tests/Integration/fixtures/teardown-fixtures.sh

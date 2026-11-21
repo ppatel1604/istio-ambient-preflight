@@ -113,6 +113,9 @@ function Invoke-AmbientPreflight {
     foreach ($finding in @(Test-CiliumPolicyCompatibility -Inventory $inventory)) {
         $findings.Add($finding)
     }
+    foreach ($finding in @(Test-GatewayConflict @checkParams)) {
+        $findings.Add($finding)
+    }
     # Future checks plug in here.
 
     Write-Host ('  findings={0}' -f $findings.Count)
