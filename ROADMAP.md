@@ -36,7 +36,7 @@ The following v0.1 stretch items are deferred to v0.2:
 
 - [ ] Demo GIF / screencast in the README (placeholder in place; recipe
       lives at `docs/demo-script.md`)
-- [ ] Wiring `tests/Integration/` into a CI integration job
+- [x] Wiring `tests/Integration/` into a CI integration job (done in v0.2 work)
 
 ## v0.2 — Patch generation, ingress checks, CI integration
 
@@ -58,7 +58,8 @@ library on the ingress side.
 - [ ] ArgoCD-compatible Helm values diffs for common chart patterns
 - [ ] `-OutputFormat json` for CI/CD pipeline integration
 - [ ] Exit code semantics: 0 = ready, 1 = warnings, 2 = blockers
-- [ ] Wire integration fixtures into a kind-based CI job
+- [x] Wire integration fixtures into a kind-based CI job
+      (`.github/workflows/integration.yml`, runs on PRs and on demand)
 
 ## v0.3 — Waypoint guidance
 

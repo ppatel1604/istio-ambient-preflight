@@ -4,8 +4,8 @@
 # End-to-end smoke test. Imports the module the same way a user would and runs
 # Invoke-AmbientPreflight against the current kubectl context. Skips (not fails)
 # if kubectl is missing or no cluster is reachable, so this file is safe to run
-# from a developer workstation without a cluster handy. CI can opt in to this
-# leg via a separate workflow once a kind-based integration harness is wired up.
+# from a developer workstation without a cluster handy. CI runs it in
+# .github/workflows/integration.yml against the kind fixture cluster.
 
 BeforeAll {
     $manifest = Resolve-Path "$PSScriptRoot/../../src/IstioAmbientPreflight/IstioAmbientPreflight.psd1"
