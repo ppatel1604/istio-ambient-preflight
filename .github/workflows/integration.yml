@@ -1,0 +1,79 @@
+name: Integration
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  kind:
+    name: Integration (kind fixtures)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      KIND_VERSION: v0.31.0
+      KIND_SHA256: eb244cbafcc157dff60cf68693c14c9a75c4e6e6fedaf9cd71c58117cb93e3fa
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Install kind (pinned, checksum-verified)
+        run: |
+          curl -fsSLo ./kind "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
+          echo "${KIND_SHA256}  ./kind" | sha256sum --check --strict
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
+          kind version
+          kubectl version --client
+
+      - name: Create kind cluster
+        run: kind create cluster --config tests/Integration/fixtures/kind-cluster.yaml --wait 0s
+
+      - name: Apply fixtures
+        run: ./tests/Integration/fixtures/setup-fixtures.sh
+
+      - name: Install Pester
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module -Name Pester -MinimumVersion 5.5.0 -Scope CurrentUser -Force -SkipPublisherCheck -ErrorAction Stop
+
+      - name: Run integration tests
+        shell: pwsh
+        env:
+          IAP_FIXTURE_CLUSTER: '1'
+        run: |
+          $config = New-PesterConfiguration
+          $config.Run.Path            = './tests/Integration'
+          $config.Run.Exit            = $true
+          $config.Output.Verbosity    = 'Detailed'
+          $config.TestResult.Enabled  = $true
+          $config.TestResult.OutputPath = './IntegrationResults.xml'
+          $config.TestResult.OutputFormat = 'NUnitXml'
+          Invoke-Pester -Configuration $config
+
+      - name: Render report for the job log
+        if: always()
+        shell: pwsh
+        run: |
+          Import-Module ./src/IstioAmbientPreflight/IstioAmbientPreflight.psd1 -Force
+          $null = Invoke-AmbientPreflight -ExcludeNamespace local-path-storage, default -OutputPath ./ambient-preflight-report.md
+          Get-Content ./ambient-preflight-report.md | Out-String | Write-Host
+
+      - name: Upload test results and report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: integration-results
+          path: |
+            ./IntegrationResults.xml
+            ./ambient-preflight-report.md
+          if-no-files-found: ignore
+
+      - name: Delete kind cluster
+        if: always()
+        run: kind delete cluster --name ambient-preflight-fixture

@@ -31,6 +31,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `setup-fixtures.sh` installs the Istio 1.24.2 and Gateway API v1.2.1
   CRDs only when they are missing.
 - 24 new unit tests (102 total).
+- CI integration job (`.github/workflows/integration.yml`): on every PR
+  to `main` (and on demand) it creates a kind cluster with a pinned,
+  checksum-verified kind binary, applies the fixture set, and runs the
+  integration suite.
+- `tests/Integration/Fixtures.Integration.Tests.ps1`: asserts that every
+  check fires on exactly its fixture resource, that the negative
+  controls stay silent, and that the severity totals and verdict match.
+  Opt-in via `IAP_FIXTURE_CLUSTER=1`, so it skips on other clusters.
 
 ### Fixed
 

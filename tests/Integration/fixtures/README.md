@@ -3,7 +3,8 @@
 YAML and helper scripts for standing up a local cluster that exercises
 every check the tool implements today. The goal is "stand it up,
 copy/paste, see findings" -- both for local development and as the
-reference recipe for the future CI integration job.
+the recipe the CI integration job (`.github/workflows/integration.yml`)
+runs on every pull request.
 
 ## What each fixture demonstrates
 
@@ -75,7 +76,15 @@ kind delete cluster --name ambient-preflight-fixture
 
 ## Why these fixtures live here
 
-When the integration harness is wired into CI (see ROADMAP.md), it will
-consume these same files. Keeping them in version control now gives
-local users -- and the future CI job -- a single source of truth for
-what "a cluster that exercises every check" looks like.
+The CI integration job uses these same files, and
+`tests/Integration/Fixtures.Integration.Tests.ps1` asserts the exact
+finding each fixture should produce. Local runs and CI therefore share
+one definition of "a cluster that exercises every check". When you add
+a check, add its fixture here and a row to that test.
+
+To run the fixture assertions locally after `setup-fixtures.sh`:
+
+```powershell
+$env:IAP_FIXTURE_CLUSTER = '1'
+Invoke-Pester ./tests/Integration
+```

@@ -114,7 +114,7 @@ istio-ambient-preflight/
 └── .github/
     └── workflows/
         ├── ci.yml                     # lint + unit tests on push
-        └── integration.yml            # planned (v0.2): kind integration tests on PR
+        └── integration.yml            # kind fixture integration tests on PR
 ```
 
 ## Definition of Done for v0.1
@@ -147,8 +147,13 @@ Istio Gateway CRD name in `Get-ClusterInventory`
 like it had zero Istio Gateways. The fixture setup script installs
 Istio and Gateway API CRDs only when they are missing, and teardown
 never removes them, because they may belong to a real install.
-Remaining v0.2 items: demo GIF, CI integration job, JSON output, exit
-codes, `-GeneratePatches`.
+The kind fixture integration job (`.github/workflows/integration.yml`)
+runs on every PR to `main` and on demand, asserting each check's exact
+findings via `tests/Integration/Fixtures.Integration.Tests.ps1`
+(opt-in with `IAP_FIXTURE_CLUSTER=1`). When adding a check, add a
+fixture to `tests/Integration/fixtures/` and a row to that test.
+Remaining v0.2 items: demo GIF, JSON output, exit codes,
+`-GeneratePatches`.
 
 1. Repo scaffold: license, readme skeleton, module manifest, directory structure, .gitignore, GitHub Actions stub
 2. `Invoke-Kubectl` wrapper + `Get-ClusterInventory` — foundation
